@@ -841,7 +841,7 @@ class Resourceful
         if (!is_null($config) && !is_null($cmsFields))
         {
             $dObj = $this->getDataObject();
-            $fields = CMSFieldPlacement::placeFields($fields, $cmsFields, $config, $dObj);
+            $fields = CMSFieldsPlacement::placeFields($fields, $cmsFields, $config, $dObj);
         }
         return $fields;
     }
@@ -856,7 +856,7 @@ class Resourceful
         if (!is_null($config) && !is_null($cmsFields))
         {
             $dObj = $this->getDataObject();
-            $fields = CMSFieldPlacement::placeFields($fields, $cmsFields, $config, $dObj);
+            $fields = CMSFieldsPlacement::placeFields($fields, $cmsFields, $config, $dObj);
         }
         return $fields;
     }
