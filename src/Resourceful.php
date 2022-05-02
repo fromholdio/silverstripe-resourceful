@@ -742,6 +742,7 @@ class Resourceful
         }
 
         $fields = $dObj->{$method}(
+            $this->isInherited(),
             $this->getSelectedSource(),
             $isDefault,
             $this->getFieldNameForSource($source),
