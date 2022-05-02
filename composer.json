@@ -1,0 +1,29 @@
+{
+  "name": "fromholdio/silverstripe-resourceful",
+  "type": "silverstripe-vendormodule",
+  "description": "",
+  "license": "BSD-3-Clause",
+  "keywords": ["silverstripe"],
+  "homepage": "https://github.com/fromholdio/silverstripe-resourceful",
+  "support": {
+    "issues": "https://github.com/fromholdio/silverstripe-resourceful/issues"
+  },
+  "authors": [{
+    "name": "Luke Fromhold",
+    "homepage": "https://fromhold.io"
+  }],
+  "require": {
+    "silverstripe/vendor-plugin": "^1.0",
+    "silverstripe/cms": "^4.1",
+    "fromholdio/silverstripe-cms-fields-placement": "dev-master",
+    "fromholdio/silverstripe-checkboxfieldgroup": "dev-master",
+    "unclecheese/display-logic": "^2.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Fromholdio\\Resourceful\\": "src/"
+    }
+  },
+  "prefer-stable": true,
+  "minimum-stability": "dev"
+}
