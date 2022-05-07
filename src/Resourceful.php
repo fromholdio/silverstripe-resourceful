@@ -43,14 +43,13 @@ class Resourceful
             'default' => self::SOURCE_LOCAL
         ],
         'values' => [
-            self::SOURCE_LOCAL => '{field_name}_Local',
+            self::SOURCE_LOCAL => '->{field_name}_Local|{field_name}_Local',
             '{inherit}' => '{field_name}_DoInherit',
             '{source}' => '{field_name}_Source'
         ],
         'relations' => [
             self::SOURCE_PARENT => 'Parent',
             self::SOURCE_SITE => 'Site',
-            self::SOURCE_LOCAL => '{field_name}_Local',
             '{require}' => self::SOURCE_PARENT .'|' .self::SOURCE_SITE
         ],
         'source_field_class' => OptionsetField::class,
@@ -69,6 +68,7 @@ class Resourceful
     public function setDataObject(DataObject $dObj): self
     {
         $this->dataObject = $dObj;
+        $this->namedConfigs = [];
         return $this;
     }
 
@@ -80,6 +80,7 @@ class Resourceful
     public function setName(string $name): self
     {
         $this->name = $name;
+        $this->namedConfigs = [];
         return $this;
     }
 
@@ -142,6 +143,23 @@ class Resourceful
             return null;
         }
         $mergedData = $this->mergeWithDefaultConfigData($namedData);
+
+        foreach ($mergedData as $key => $value)
+        {
+            if (is_array($value)) {
+                foreach ($value as $subKey => $subValue) {
+                    if (is_string($subValue) && str_contains($subValue, '|')) {
+                        $subValue = explode('|', $subValue);
+                        $mergedData[$key][$subKey] = $subValue;
+                    }
+                }
+            }
+            elseif (is_string($value) && str_contains($value, '|')) {
+                $value = explode('|', $value);
+                $mergedData[$key] = $value;
+            }
+        }
+
         $this->namedConfigs[$name] = $mergedData;
         return $mergedData;
     }
@@ -153,13 +171,7 @@ class Resourceful
         foreach ($defaultData['values'] as $key => $value)
         {
             $newValue = str_replace('{field_name}', $this->getName(), $value);
-            unset($defaultData['values'][$key]);
-            if (
-                $key !== self::SOURCE_LOCAL
-                || ($dObj->hasField($newValue) && is_null($dObj->getRelationType($newValue)))
-            ) {
-                $defaultData['values'][$key] = $newValue;
-            }
+            $defaultData['values'][$key] = $newValue;
         }
         foreach ($defaultData['relations'] as $key => $value)
         {
@@ -466,15 +478,21 @@ class Resourceful
     public function getMethodNameForSource(string $source)
     {
         $valueKeys = $this->getConfigValue('values');
-        $methodName = $valueKeys[$source] ?? null;
-        if (is_string($methodName) && mb_strpos($methodName, '->') === 0)
-        {
-            $methodName = mb_substr($methodName, 2);
-            $methodName = $this->getDataObject()->hasMethod($methodName)
-                ? $methodName
-                : null;
+        $methodNames = $valueKeys[$source] ?? null;
+        if (!is_array($methodNames)) {
+            $methodNames = [$methodNames];
         }
-        elseif ($methodName !== false) {
+        foreach ($methodNames as $methodName) {
+            if (is_string($methodName) && mb_strpos($methodName, '->') === 0)
+            {
+                $methodName = mb_substr($methodName, 2);
+                if ($this->getDataObject()->hasMethod($methodName)) {
+                    break;
+                }
+            }
+            elseif ($methodName === false) {
+                break;
+            }
             $methodName = null;
         }
         return $methodName;
@@ -483,15 +501,21 @@ class Resourceful
     public function getFieldNameForSource(string $source)
     {
         $valueKeys = $this->getConfigValue('values');
-        $fieldName = $valueKeys[$source] ?? null;
-        if (is_string($fieldName) && mb_strpos($fieldName, '->') !== 0)
-        {
-            $dObj = $this->getDataObject();
-            $fieldName = $dObj->hasField($fieldName) && is_null($dObj->getRelationType($fieldName))
-                ? $fieldName
-                : null;
+        $fieldNames = $valueKeys[$source] ?? null;
+        if (!is_array($fieldNames)) {
+            $fieldNames = [$fieldNames];
         }
-        elseif ($fieldName !== false) {
+        foreach ($fieldNames as $fieldName) {
+            if (is_string($fieldName) && mb_strpos($fieldName, '->') !== 0)
+            {
+                $dObj = $this->getDataObject();
+                if ($dObj->hasField($fieldName) && is_null($dObj->getRelationType($fieldName))) {
+                    break;
+                }
+            }
+            elseif ($fieldName === false) {
+                break;
+            }
             $fieldName = null;
         }
         return $fieldName;
@@ -500,15 +524,21 @@ class Resourceful
     public function getRelationMethodNameForSource(string $source)
     {
         $relationKeys = $this->getConfigValue('relations');
-        $methodName = $relationKeys[$source] ?? null;
-        if (is_string($methodName) && mb_strpos($methodName, '->') === 0)
-        {
-            $methodName = mb_substr($methodName, 2);
-            $methodName = $this->getDataObject()->hasMethod($methodName)
-                ? $methodName
-                : null;
+        $methodNames = $relationKeys[$source] ?? null;
+        if (!is_array($methodNames)) {
+            $methodNames = [$methodNames];
         }
-        elseif ($methodName !== false) {
+        foreach ($methodNames as $methodName) {
+            if (is_string($methodName) && mb_strpos($methodName, '->') === 0)
+            {
+                $methodName = mb_substr($methodName, 2);
+                if ($this->getDataObject()->hasMethod($methodName)) {
+                    break;
+                }
+            }
+            elseif ($methodName === false) {
+                break;
+            }
             $methodName = null;
         }
         return $methodName;
@@ -517,14 +547,20 @@ class Resourceful
     public function getRelationNameForSource(string $source)
     {
         $relationKeys = $this->getConfigValue('relations');
-        $relationName = $relationKeys[$source] ?? null;
-        if (is_string($relationName) && mb_strpos($relationName, '->') !== 0)
-        {
-            $relationName = !is_null($this->getDataObject()->getRelationType($relationName))
-                ? $relationName
-                : null;
+        $relationNames = $relationKeys[$source] ?? null;
+        if (!is_array($relationNames)) {
+            $relationNames = [$relationNames];
         }
-        elseif ($relationName !== false) {
+        foreach ($relationNames as $relationName) {
+            if (is_string($relationName) && mb_strpos($relationName, '->') !== 0)
+            {
+                if (!is_null($this->getDataObject()->getRelationType($relationName))) {
+                    break;
+                }
+            }
+            elseif ($relationName === false) {
+                break;
+            }
             $relationName = null;
         }
         return $relationName;
