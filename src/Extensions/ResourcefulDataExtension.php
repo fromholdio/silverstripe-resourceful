@@ -16,27 +16,27 @@ class ResourcefulDataExtension extends DataExtension
 
     public function isResourcefulEnabled(string $name): bool
     {
-        return $this->getResourceful($name)->isEnabled();
+        return $this->getOwner()->getResourceful($name)->isEnabled();
     }
 
     public function getResourcefulValue(string $name)
     {
-        return $this->getResourceful($name)->getValue();
+        return $this->getOwner()->getResourceful($name)->getValue();
     }
 
     public function isResourcefulInheritable(string $name): bool
     {
-        return $this->getResourceful($name)->isInheritable();
+        return $this->getOwner()->getResourceful($name)->isInheritable();
     }
 
     public function isResourcefulInherited(string $name): bool
     {
-        return $this->getResourceful($name)->isInherited();
+        return $this->getOwner()->getResourceful($name)->isInherited();
     }
 
     public function getResourcefulSourceFieldOptions(string $name): ?array
     {
-        return $this->getResourceful($name)->getSourceFieldOptions();
+        return $this->getOwner()->getResourceful($name)->getSourceFieldOptions();
     }
 
     public function populateDefaults(): void
@@ -54,9 +54,12 @@ class ResourcefulDataExtension extends DataExtension
         $fields = Resourceful::placeAllSettingsFields($fields, $this->getOwner());
     }
 
+    /**
+     * @return DataObject&ResourcefulDataExtension
+     */
     public function getOwner(): DataObject
     {
-        /** @var DataObject $owner */
+        /** @var DataObject&ResourcefulDataExtension $owner */
         $owner = parent::getOwner();
         return $owner;
     }
