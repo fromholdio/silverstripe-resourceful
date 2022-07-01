@@ -15,8 +15,8 @@
   "require": {
     "silverstripe/vendor-plugin": "^1.0",
     "silverstripe/cms": "^4.1",
-    "fromholdio/silverstripe-cms-fields-placement": "dev-master",
-    "fromholdio/silverstripe-checkboxfieldgroup": "dev-master",
+    "fromholdio/silverstripe-cms-fields-placement": "^1.0.0",
+    "fromholdio/silverstripe-checkboxfieldgroup": "^1.0.0",
     "unclecheese/display-logic": "^2.0.0"
   },
   "autoload": {
