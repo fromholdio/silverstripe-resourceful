@@ -13,7 +13,6 @@
     "homepage": "https://fromhold.io"
   }],
   "require": {
-    "silverstripe/vendor-plugin": "^1.0",
     "silverstripe/framework": "~4.1 || ~5.0",
     "silverstripe/siteconfig": "~4.1 || ~5.0",
     "fromholdio/silverstripe-cms-fields-placement": "^1.1.0",
