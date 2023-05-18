@@ -14,10 +14,11 @@
   }],
   "require": {
     "silverstripe/vendor-plugin": "^1.0",
-    "silverstripe/cms": "^4.1",
-    "fromholdio/silverstripe-cms-fields-placement": "^1.0.0",
-    "fromholdio/silverstripe-checkboxfieldgroup": "^1.0.0",
-    "unclecheese/display-logic": "^2.0.0"
+    "silverstripe/framework": "~4.1 || ~5.0",
+    "silverstripe/siteconfig": "~4.1 || ~5.0",
+    "fromholdio/silverstripe-cms-fields-placement": "^1.1.0",
+    "fromholdio/silverstripe-checkboxfieldgroup": "^1.1.0",
+    "unclecheese/display-logic": "^2.0.0 || ^3.0.0"
   },
   "autoload": {
     "psr-4": {
