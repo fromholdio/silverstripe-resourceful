@@ -49,6 +49,11 @@ class ResourcefulDataExtension extends DataExtension
         $fields = Resourceful::placeAllCMSFields($fields, $this->getOwner());
     }
 
+    public function updateSiteCMSFields(FieldList $fields): void
+    {
+        $fields = Resourceful::placeAllCMSFields($fields, $this->getOwner());
+    }
+
     public function updateSettingsFields(FieldList $fields): void
     {
         $fields = Resourceful::placeAllSettingsFields($fields, $this->getOwner());
