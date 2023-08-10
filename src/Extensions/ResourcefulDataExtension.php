@@ -36,7 +36,7 @@ class ResourcefulDataExtension extends DataExtension
 
     public function getResourcefulSourceFieldOptions(string $name): ?array
     {
-        return $this->getOwner()->getResourceful($name)->getSourceFieldOptions();
+        return $this->getOwner()->getResourceful($name)->getSourceCMSFieldOptions();
     }
 
     public function populateDefaults(): void
