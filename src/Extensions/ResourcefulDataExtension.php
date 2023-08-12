@@ -9,6 +9,8 @@ use SilverStripe\ORM\DataObject;
 
 class ResourcefulDataExtension extends DataExtension
 {
+    private static $do_auto_place_resourceful_cms_fields = true;
+
     public function getResourceful(string $name): Resourceful
     {
         return Resourceful::inst($this->getOwner(), $name);
@@ -46,17 +48,30 @@ class ResourcefulDataExtension extends DataExtension
 
     public function updateCMSFields(FieldList $fields): void
     {
-        $fields = Resourceful::placeAllCMSFields($fields, $this->getOwner());
+        if ($this->getOwner()->isResourcefulCMSFieldsAutoPlacementEnabled()) {
+            $fields = Resourceful::placeAllCMSFields($fields, $this->getOwner());
+        }
     }
 
     public function updateSiteCMSFields(FieldList $fields): void
     {
-        $fields = Resourceful::placeAllCMSFields($fields, $this->getOwner());
+        if ($this->getOwner()->isResourcefulCMSFieldsAutoPlacementEnabled()) {
+            $fields = Resourceful::placeAllCMSFields($fields, $this->getOwner());
+        }
     }
 
     public function updateSettingsFields(FieldList $fields): void
     {
-        $fields = Resourceful::placeAllSettingsFields($fields, $this->getOwner());
+        if ($this->getOwner()->isResourcefulCMSFieldsAutoPlacementEnabled()) {
+            $fields = Resourceful::placeAllSettingsFields($fields, $this->getOwner());
+        }
+    }
+
+    public function isResourcefulCMSFieldsAutoPlacementEnabled(): bool
+    {
+        $isEnabled = (bool) $this->getOwner()->config()->get('do_auto_place_resourceful_cms_fields');
+        $this->getOwner()->invokeWithExtensions('updateIsResourcefulCMSFieldsAutoPlacementEnabled', $isEnabled);
+        return $isEnabled;
     }
 
     /**
