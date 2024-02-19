@@ -457,8 +457,9 @@ class Resourceful
     public function getFallbackSite(): ?DataObject
     {
         $site = null;
-        $multisitesExists = ModuleLoader::inst()->getManifest()
-            ->moduleExists('symbiote/silverstripe-multisites');
+        $manifest = ModuleLoader::inst()->getManifest();
+        $multisitesExists = $manifest->moduleExists('symbiote/silverstripe-multisites')
+            || $manifest->moduleExists('fromholdio/silverstripe-configured-multisites');
         if ($multisitesExists)
         {
             $dObj = $this->getDataObject();
