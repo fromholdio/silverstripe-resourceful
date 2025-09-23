@@ -9,4 +9,4 @@ For example:
 
 This module is quite abstract, it provides the means to implement this pattern, mainly through config yml.
 
-Requires Silverstripe 4+ or 5+.
+Requires Silverstripe 6.x.
