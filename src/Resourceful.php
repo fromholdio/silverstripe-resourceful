@@ -4,7 +4,7 @@ namespace Fromholdio\Resourceful;
 
 use Fromholdio\CheckboxFieldGroup\CheckboxFieldGroup;
 use Fromholdio\CMSFieldsPlacement\CMSFieldsPlacement;
-use Fromholdio\Resourceful\Extensions\ResourcefulDataExtension;
+use Fromholdio\Resourceful\Extensions\ResourcefulExtension;
 use SilverStripe\Core\Config\Configurable;
 use SilverStripe\Core\Extensible;
 use SilverStripe\Core\Injector\Injectable;
@@ -470,7 +470,7 @@ class Resourceful
         else {
             $site = SiteConfig::current_site_config();
         }
-        return $site && $site->exists() && $site->hasExtension(ResourcefulDataExtension::class)
+        return $site && $site->exists() && $site->hasExtension(ResourcefulExtension::class)
             ? $site
             : null;
     }

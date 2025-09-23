@@ -3,11 +3,11 @@
 namespace Fromholdio\Resourceful\Extensions;
 
 use Fromholdio\Resourceful\Resourceful;
+use SilverStripe\Core\Extension;
 use SilverStripe\Forms\FieldList;
-use SilverStripe\ORM\DataExtension;
 use SilverStripe\ORM\DataObject;
 
-class ResourcefulDataExtension extends DataExtension
+class ResourcefulExtension extends Extension
 {
     private static $do_auto_place_resourceful_cms_fields = true;
 
@@ -41,7 +41,7 @@ class ResourcefulDataExtension extends DataExtension
         return $this->getOwner()->getResourceful($name)->getSourceCMSFieldOptions();
     }
 
-    public function populateDefaults(): void
+    public function onAfterPopulateDefaults(): void
     {
         Resourceful::setAllFieldDefaults($this->getOwner());
     }
@@ -75,11 +75,11 @@ class ResourcefulDataExtension extends DataExtension
     }
 
     /**
-     * @return DataObject&ResourcefulDataExtension
+     * @return DataObject&ResourcefulExtension
      */
     public function getOwner(): DataObject
     {
-        /** @var DataObject&ResourcefulDataExtension $owner */
+        /** @var DataObject&ResourcefulExtension $owner */
         $owner = parent::getOwner();
         return $owner;
     }
