@@ -694,7 +694,7 @@ class Resourceful
             $defaultSource = $this->getDefaultSource();
             if (is_a($sourceField, HiddenField::class, false))
             {
-                $source = $sourceField->Value();
+                $source = $sourceField->getValue();
                 if ($source === self::SOURCE_DEFAULT) {
                     $source = $defaultSource;
                 }
