@@ -1,0 +1,852 @@
+# Resourceful Module - AI Technical Deep Dive
+
+This document provides comprehensive technical details about the Resourceful module for AI assistants. It covers architecture, implementation mechanics, patterns, edge cases, and debugging strategies.
+
+## Architecture Overview
+
+### Core Components
+
+1. **Resourceful Class** (`src/Resourceful.php`)
+   - Singleton-based factory pattern
+   - Configuration-driven behavior
+   - Handles value retrieval and source resolution
+   - Generates CMS fields automatically
+
+2. **ResourcefulExtension** (`src/Extensions/ResourcefulExtension.php`)
+   - Applied to DataObjects that use resourceful fields
+   - Provides convenience methods
+   - Hooks into CMS field generation
+   - Sets field defaults on object creation
+
+### Design Philosophy
+
+**Problem Solved**: In hierarchical SilverStripe projects, implementing field inheritance requires repetitive boilerplate:
+- Database fields for inheritance flags and source selection
+- Getter methods with traversal logic
+- CMS fields with display logic
+- Consistent UX across all inheritable fields
+
+**Solution**: Configuration-driven approach where YAML defines:
+- Available sources (local, parent, site, custom)
+- Inheritance behavior
+- Field placement
+- Value retrieval methods
+
+**Key Insight**: By abstracting the inheritance pattern into configuration, Resourceful eliminates 90% of boilerplate code while providing consistent UX.
+
+## Configuration System
+
+### Configuration Structure
+
+```yaml
+DataObject:
+  resourceful:
+    FieldName:
+      enabled: true|false
+      sources:
+        force: null|'source'|['source1', 'source2']
+        inherit: null|'source'
+        select: 'source1|source2|source3'
+        default: 'source'
+      values:
+        source: 'field_name'|'->method_name'|['->method', 'field']
+        '{inherit}': 'DoInheritFieldName'
+        '{source}': 'SourceFieldName'
+      relations:
+        source: 'RelationName'|'->method_name'
+        '{require}': 'source1|source2'
+      source_field_class: 'FormFieldClass'
+      cms_fields:
+        tab_path: 'Root.Tab'
+        placement: 'before'|'after'
+        field: 'FieldName'
+      settings_fields:
+        tab_path: 'Root.Settings'
+```
+
+### Configuration Merging
+
+**Default Configuration** (`Resourceful::$default_config`):
+```php
+[
+    'enabled' => true,
+    'sources' => [
+        'force' => null,
+        'inherit' => null,
+        'select' => self::SOURCE_LOCAL,
+        'default' => self::SOURCE_LOCAL
+    ],
+    'values' => [
+        self::SOURCE_LOCAL => '->{field_name}_Local|{field_name}_Local',
+        '{inherit}' => '{field_name}_DoInherit',
+        '{source}' => '{field_name}_Source'
+    ],
+    'relations' => [
+        self::SOURCE_PARENT => 'Parent',
+        self::SOURCE_SITE => 'Site',
+        '{require}' => self::SOURCE_PARENT .'|' .self::SOURCE_SITE
+    ],
+    'source_field_class' => OptionsetField::class,
+    'cms_fields' => null,
+    'settings_fields' => null
+]
+```
+
+**Merge Process**:
+1. Get default config with `{field_name}` placeholders replaced
+2. Get named config from DataObject's `resourceful` config
+3. Merge arrays recursively (named config overrides defaults)
+4. Parse pipe-separated strings into arrays
+5. Cache merged config per field name
+
+**Key Methods**:
+- `getDefaultConfigData()` - Returns defaults with placeholders replaced
+- `mergeWithDefaultConfigData($namedData)` - Merges named with defaults
+- `getConfigData()` - Returns cached merged config
+- `getConfigValue($key)` - Gets value with dot notation support
+
+### Configuration Caching
+
+**Cache Strategy**:
+- Cached per Resourceful instance in `$namedConfigs` array
+- Cache key is field name
+- Cache cleared when DataObject or name changes
+- No persistent caching (regenerated per request)
+
+**Why No Persistent Cache**: Configuration is lightweight and merging is fast. Per-request caching prevents stale config issues.
+
+## Source Resolution System
+
+### Source Types
+
+**Built-in Sources**:
+- `SOURCE_LOCAL` = 'local' - Value stored on current object
+- `SOURCE_PARENT` = 'parent' - Inherited from parent object
+- `SOURCE_SITE` = 'site' - Site-wide default
+- `SOURCE_DEFAULT` = 'default' - Use configured default source
+- `SOURCE_NONE` = 'none' - No value (null)
+
+**Custom Sources**: Any string can be a source if configured in `values` or `relations`.
+
+### Source Resolution Flow
+
+```
+getSource()
+├─ getForceSource() - Check if source is forced
+│  └─ If forced, return forced source
+├─ isInherited() - Check if inheriting
+│  └─ If inheriting, return getInheritSource()
+└─ getSelectedSource() - Get user-selected source
+   └─ If null or unavailable, return getDefaultSource()
+```
+
+**Key Methods**:
+
+1. **`getSource(): ?string`**
+   - Returns the current active source
+   - Respects force > inherit > selected > default priority
+
+2. **`getForceSource(): ?string`**
+   - Returns forced source from config
+   - Supports array of sources (tries each until available)
+   - Returns null if not forced
+
+3. **`getInheritSource(): ?string`**
+   - Returns source to inherit from (usually 'parent')
+   - Only used when `isInherited()` returns true
+
+4. **`getSelectedSource(): ?string`**
+   - Returns user-selected source from `{source}` field
+   - Returns null if field empty or set to 'default'
+
+5. **`getDefaultSource(): ?string`**
+   - Returns configured default source
+   - Fallback when no source selected
+
+### Source Availability
+
+**`isSourceAvailable(string $source): bool`**
+
+Checks if a source can be used:
+
+1. **Special sources**: 'none' and 'default' are always available
+2. **Field sources**: Check if field exists via `getFieldNameForSource()`
+3. **Method sources**: Check if method exists via `getMethodNameForSource()`
+4. **Relation sources**: 
+   - If required (in `{require}`), check relation exists
+   - Otherwise, check relation name/method exists
+5. **Site source**: Check if `getFallbackSite()` returns object
+
+**Required Relations** (`{require}` config):
+- Sources listed in `relations.{require}` must have existing relation
+- Prevents selecting source when relation doesn't exist
+- Example: Parent source requires Parent relation to exist
+
+## Value Retrieval System
+
+### Value Resolution Flow
+
+```
+getValue()
+└─ getSource() - Determine active source
+   └─ getSourceValue(source)
+      ├─ Check for method via getMethodNameForSource()
+      │  └─ Call method if exists
+      ├─ Check for field via getFieldNameForSource()
+      │  └─ Get field value if exists
+      └─ Check for relation via getSourceRelation()
+         └─ Recursively call getValue() on relation
+```
+
+**Key Methods**:
+
+1. **`getValue()`**
+   - Main entry point for value retrieval
+   - Returns null if not enabled
+   - Delegates to `getSourceValue()`
+
+2. **`getSourceValue(?string $source)`**
+   - Retrieves value from specific source
+   - Handles 'default' and 'none' special cases
+   - Tries method > field > relation in order
+   - Recursively traverses relations
+
+3. **`getMethodNameForSource(string $source)`**
+   - Returns method name for source from `values` config
+   - Methods prefixed with `->` in config
+   - Checks if method exists on DataObject
+   - Returns null if no method configured/exists
+
+4. **`getFieldNameForSource(string $source)`**
+   - Returns field name for source from `values` config
+   - Fields are plain strings (no `->` prefix)
+   - Checks if field exists and is not a relation
+   - Returns null if no field configured/exists
+
+5. **`getSourceRelation(?string $source): ?DataObject`**
+   - Returns related object for source
+   - Tries relation method > relation name > site fallback
+   - Returns null if relation doesn't exist
+   - Used for recursive value retrieval
+
+### Fallback Chains
+
+**Multiple Value Options** (pipe-separated):
+```yaml
+values:
+  local: '->getLocalValue|LocalValue_Field|->fallbackMethod'
+```
+
+**Resolution Order**:
+1. Try `->getLocalValue()` method
+2. Try `LocalValue_Field` field
+3. Try `->fallbackMethod()` method
+4. Return null if all fail
+
+**Multiple Relation Options**:
+```yaml
+relations:
+  parent: '->getParentObject|Parent|->fallbackParent'
+```
+
+**Resolution Order**:
+1. Try `->getParentObject()` method
+2. Try `Parent` relation
+3. Try `->fallbackParent()` method
+4. Return null if all fail
+
+### Recursive Traversal
+
+**Parent Inheritance**:
+```php
+// Page A (root)
+//   └─ Page B (inherits)
+//        └─ Page C (inherits)
+
+// Page C calls getValue()
+getSourceValue('parent')
+└─ getSourceRelation('parent') // Returns Page B
+   └─ Resourceful::inst(Page B, 'FieldName')
+      └─ getValue() // Page B is also inheriting
+         └─ getSourceValue('parent')
+            └─ getSourceRelation('parent') // Returns Page A
+               └─ Resourceful::inst(Page A, 'FieldName')
+                  └─ getValue() // Page A uses local value
+                     └─ getSourceValue('local')
+                        └─ Returns Page A's local value
+```
+
+**Recursion Prevention**: None needed - recursion naturally terminates when:
+- Object doesn't inherit (uses local/site/none)
+- Parent relation doesn't exist
+- Relation returns null
+
+## Inheritance System
+
+### Inheritance Mechanics
+
+**Inheritance Enabled When**:
+1. `isInheritable()` returns true:
+   - DoInherit field name configured
+   - Inherit source configured
+   - Inherit source is available
+   - DataObject has DoInherit field
+
+2. `isInherited()` returns true:
+   - `isInheritable()` is true
+   - DoInherit field value is true
+
+**Inheritance Flow**:
+```
+User checks "Inherit from parent" checkbox
+└─ DoInherit field set to true
+   └─ getSource() returns getInheritSource()
+      └─ getValue() calls getSourceValue('parent')
+         └─ Traverses to parent and recursively calls getValue()
+```
+
+### DoInherit Field
+
+**Purpose**: Boolean field that enables/disables inheritance
+
+**Field Name**: Configured in `values.{inherit}`, defaults to `{FieldName}_DoInherit`
+
+**Behavior**:
+- When true: Use inherit source (usually parent)
+- When false: Use selected or default source
+- Overrides source selection when true
+
+**CMS Field**: CheckboxFieldGroup with label from `fieldLabel()`
+
+### Inheritance vs Source Selection
+
+**Key Distinction**:
+- **Inheritance**: Binary on/off via checkbox
+- **Source Selection**: Choose between available sources
+
+**Interaction**:
+- When inheriting: Source selection hidden (display logic)
+- When not inheriting: Source selection visible
+- Inheritance takes precedence over source selection
+
+**Example**:
+```
+[ ] Inherit from parent
+    ○ Use site default
+    ○ Use custom content
+    ○ No sidebar
+```
+
+When checkbox checked:
+```
+[✓] Inherit from parent
+    (source selection hidden)
+```
+
+## CMS Field Generation
+
+### Field Generation Flow
+
+```
+getCMSFields()
+├─ Check if enabled
+├─ Check for custom method (get{FieldName}CMSFields)
+├─ Generate DoInherit field (if inheritable)
+├─ Generate Source field
+│  ├─ Get available sources
+│  ├─ Create OptionsetField or HiddenField
+│  └─ Wrap in DisplayLogic wrapper
+├─ Generate per-source fields
+│  └─ Call getCMSFields_{FieldName}_{source}() for each source
+└─ Return FieldList
+```
+
+### DoInherit Field
+
+**Generated When**: `isInheritable()` returns true
+
+**Field Type**: CheckboxFieldGroup (from fromholdio/silverstripe-checkboxfieldgroup)
+
+**Field Name**: From `getDoInheritFieldName()`
+
+**Labels**: From `fieldLabel()` on DataObject
+
+**Display Logic**: None (always visible when inheritable)
+
+### Source Field
+
+**Generated When**: Source field name configured and sources available
+
+**Field Type**:
+- **HiddenField**: When only one source available
+- **OptionsetField**: When multiple sources available (default)
+- **Custom**: Via `source_field_class` config
+
+**Field Name**: From `getSourceFieldName()`
+
+**Options**: From `getSourceCMSFieldOptions()`
+- Maps source keys to labels
+- Default source mapped to 'default' key
+- Labels from `fieldLabel({SourceFieldName}_{source})`
+
+**Display Logic**: Hidden when DoInherit is checked
+
+### Per-Source Fields
+
+**Method Convention**: `getCMSFields_{FieldName}_{source}()`
+
+**Method Signature**:
+```php
+public function getCMSFields_{FieldName}_{source}(
+    bool $isInherited,
+    ?string $selectedSource,
+    bool $isDefault,
+    ?string $fieldName,
+    ?string $relationName
+): FieldList|FormField
+```
+
+**Parameters**:
+- `$isInherited` - Whether currently inheriting
+- `$selectedSource` - User-selected source (null if default)
+- `$isDefault` - Whether this source is the default
+- `$fieldName` - Field name for this source (from values config)
+- `$relationName` - Relation name for this source (from relations config)
+
+**Display Logic**: Shown when source field equals this source
+
+**Example**:
+```php
+public function getCMSFields_SidebarArea_local(
+    bool $isInherited,
+    ?string $selectedSource,
+    bool $isDefault,
+    ?string $fieldName,
+    ?string $relationName
+): FieldList {
+    return FieldList::create(
+        HTMLEditorField::create('SidebarContent_Local', 'Sidebar Content')
+    );
+}
+```
+
+### Field Placement
+
+**Auto-Placement** (default):
+- Enabled via `do_auto_place_resourceful_cms_fields` config (default true)
+- Hooks into `updateCMSFields()`, `updateSiteCMSFields()`, `updateSettingsFields()`
+- Uses fromholdio/silverstripe-cms-fields-placement for placement
+
+**Manual Placement**:
+```php
+$resourceful = $this->getResourceful('FieldName');
+$fields = $resourceful->placeCMSFields($fields);
+```
+
+**Placement Config**:
+```yaml
+cms_fields:
+  tab_path: 'Root.Main'  # Place in tab
+  placement: 'before'    # before/after
+  field: 'Content'       # Relative to this field
+```
+
+## Field Defaults
+
+### Default Values
+
+**Set When**: `onAfterPopulateDefaults()` hook
+
+**Values Set**:
+- DoInherit field: `true`
+- Source field: `'default'`
+
+**Method**: `Resourceful::setAllFieldDefaults()`
+
+**Why**: Ensures new objects have sensible defaults (inherit by default)
+
+### Default Source Handling
+
+**'default' Value**: Special value in Source field
+
+**Resolution**: When Source field is 'default', `getSelectedSource()` returns null, causing `getDefaultSource()` to be used
+
+**Why Not Direct Value**: Allows changing default source in config without database migration
+
+## Integration Patterns
+
+### Elemental Base Integration
+
+**Pattern**: Use Resourceful for Current vs Local elemental areas
+
+**Configuration**:
+```yaml
+Page:
+  elemental_areas:
+    SidebarArea:
+      has_one: 'SidebarArea_Local'  # Local storage
+      current: 'getResourcefulArea'  # Current retrieval
+  
+  resourceful:
+    SidebarArea:
+      sources:
+        inherit: 'parent'
+        select: 'site|local|none'
+```
+
+**Implementation**:
+```php
+public function getResourcefulArea(string $name): ?EvoElementalArea
+{
+    return $this->getResourcefulValue($name);
+}
+```
+
+**Result**: Elemental areas can inherit from parent or use site defaults
+
+### Multisite Integration
+
+**Detection**: Checks for multisite modules via ModuleLoader
+
+**Modules Detected**:
+- `symbiote/silverstripe-multisites`
+- `fromholdio/silverstripe-configured-multisites`
+
+**Behavior**:
+- If multisite: Use `Site` relation
+- If not: Use `SiteConfig::current_site_config()`
+
+**Method**: `getFallbackSite()`
+
+## Edge Cases & Gotchas
+
+### 1. Circular Inheritance
+
+**Scenario**: Page A inherits from Page B, Page B inherits from Page A
+
+**Prevention**: None built-in
+
+**Result**: Infinite recursion, PHP fatal error
+
+**Solution**: Don't create circular parent relationships (SilverStripe prevents this at tree level)
+
+### 2. Missing Relations
+
+**Scenario**: Source configured but relation doesn't exist
+
+**Behavior**: `isSourceAvailable()` returns false, source not selectable
+
+**Prevention**: Use `{require}` config to mark sources that need relations
+
+### 3. Type Mismatches
+
+**Scenario**: Field expects Image but method returns string
+
+**Behavior**: Type error or unexpected behavior
+
+**Prevention**: Ensure value types match across inheritance chain
+
+### 4. Null vs Empty
+
+**Scenario**: Distinguishing between "no value" and "empty value"
+
+**Behavior**: Both return null from `getValue()`
+
+**Solution**: Use 'none' source explicitly for "no value"
+
+### 5. Default Source Changes
+
+**Scenario**: Change default source in config after objects created
+
+**Behavior**: Objects with Source='default' automatically use new default
+
+**Benefit**: No database migration needed
+
+### 6. Force Source with Unavailable Source
+
+**Scenario**: `force: 'parent'` but no parent exists
+
+**Behavior**: `getForceSource()` returns 'parent', `getSourceValue()` returns null
+
+**Solution**: Use array for force: `force: ['parent', 'site']`
+
+### 7. Method vs Field Priority
+
+**Scenario**: Both method and field configured for same source
+
+**Behavior**: Method takes priority (checked first)
+
+**Why**: Methods can contain logic, fields are just data
+
+### 8. Relation Recursion Depth
+
+**Scenario**: Deep inheritance chain (10+ levels)
+
+**Behavior**: Works but may be slow
+
+**Optimization**: None built-in, consider caching
+
+## Debugging Strategies
+
+### 1. Trace Source Resolution
+
+```php
+$resourceful = $page->getResourceful('FieldName');
+$source = $resourceful->getSource();
+$value = $resourceful->getSourceValue($source);
+
+// Check each step
+$forced = $resourceful->getForceSource();
+$inherited = $resourceful->isInherited();
+$selected = $resourceful->getSelectedSource();
+$default = $resourceful->getDefaultSource();
+```
+
+### 2. Check Configuration
+
+```php
+$config = $resourceful->getConfigData();
+var_dump($config);
+
+// Check specific values
+$sources = $resourceful->getConfigValue('sources');
+$values = $resourceful->getConfigValue('values');
+$relations = $resourceful->getConfigValue('relations');
+```
+
+### 3. Test Source Availability
+
+```php
+$sources = $resourceful->getSelectSources();
+foreach ($sources as $source) {
+    $available = $resourceful->isSourceAvailable($source);
+    echo "$source: " . ($available ? 'available' : 'unavailable') . "\n";
+}
+```
+
+### 4. Trace Relation Traversal
+
+```php
+$relation = $resourceful->getSourceRelation('parent');
+if ($relation) {
+    $parentResourceful = Resourceful::inst($relation, 'FieldName');
+    $parentValue = $parentResourceful->getValue();
+}
+```
+
+### 5. Check Field Names
+
+```php
+$fieldName = $resourceful->getFieldNameForSource('local');
+$methodName = $resourceful->getMethodNameForSource('local');
+$relationName = $resourceful->getRelationNameForSource('parent');
+```
+
+## Performance Considerations
+
+### Configuration Caching
+
+**Current**: Per-request caching in `$namedConfigs`
+
+**Impact**: Minimal - config merging is fast
+
+**Optimization**: Not needed
+
+### Value Caching
+
+**Current**: No caching
+
+**Impact**: Each `getValue()` call traverses relations
+
+**Optimization**: Consider caching in DataObject if called frequently
+
+**Example**:
+```php
+private $cachedResourcefulValues = [];
+
+public function getSidebarArea(): ?EvoElementalArea
+{
+    if (!isset($this->cachedResourcefulValues['SidebarArea'])) {
+        $this->cachedResourcefulValues['SidebarArea'] = 
+            $this->getResourcefulValue('SidebarArea');
+    }
+    return $this->cachedResourcefulValues['SidebarArea'];
+}
+```
+
+### Relation Traversal
+
+**Current**: Recursive traversal on each call
+
+**Impact**: Deep hierarchies may be slow
+
+**Optimization**: Cache at DataObject level or use partial caching
+
+### CMS Field Generation
+
+**Current**: Generated on each CMS load
+
+**Impact**: Minimal - field generation is fast
+
+**Optimization**: Not needed
+
+## Common Patterns
+
+### Pattern 1: Simple Inheritance
+
+```yaml
+Page:
+  resourceful:
+    HeaderImage:
+      sources:
+        inherit: 'parent'
+        select: 'local|none'
+```
+
+**Use Case**: Simple parent inheritance with local override
+
+### Pattern 2: Site Default with Parent Inheritance
+
+```yaml
+Page:
+  resourceful:
+    SidebarArea:
+      sources:
+        inherit: 'parent'
+        select: 'site|local|none'
+        default: 'site'
+```
+
+**Use Case**: Most pages use site default, some inherit from parent, some customize
+
+### Pattern 3: Forced Source
+
+```yaml
+HomePage:
+  resourceful:
+    SidebarArea:
+      sources:
+        force: 'none'
+```
+
+**Use Case**: Specific page types never have certain features
+
+### Pattern 4: Custom Source Method
+
+```yaml
+Page:
+  resourceful:
+    SidebarArea:
+      values:
+        site: '->getSitebarConfig'
+      relations:
+        site: '->getSidebarConfigObject'
+```
+
+**Use Case**: Complex logic for retrieving site defaults
+
+### Pattern 5: Multiple Fallbacks
+
+```yaml
+Page:
+  resourceful:
+    SidebarArea:
+      sources:
+        force: ['parent', 'site', 'none']
+```
+
+**Use Case**: Try parent, fallback to site, fallback to none
+
+## Future Considerations
+
+### Potential Enhancements
+
+1. **Value Caching**: Built-in caching for getValue() results
+2. **Lazy Loading**: Defer relation traversal until needed
+3. **Event Hooks**: Extension points for custom logic
+4. **Validation**: Validate configuration on dev/build
+5. **Debug Mode**: Verbose logging of source resolution
+6. **Performance Profiling**: Track traversal depth and time
+7. **GraphQL Support**: Expose resourceful values via GraphQL
+8. **REST API**: Expose resourceful values via REST API
+
+### Backward Compatibility
+
+**Current Version**: 2.x
+
+**Breaking Changes**: None planned
+
+**Deprecations**: None
+
+**Migration Path**: N/A
+
+## Testing Strategies
+
+### Unit Testing
+
+**Test Configuration Merging**:
+```php
+$resourceful = Resourceful::inst($page, 'FieldName');
+$config = $resourceful->getConfigData();
+$this->assertEquals('parent', $config['sources']['inherit']);
+```
+
+**Test Source Resolution**:
+```php
+$page->FieldName_DoInherit = true;
+$source = $resourceful->getSource();
+$this->assertEquals('parent', $source);
+```
+
+**Test Value Retrieval**:
+```php
+$parent->FieldName_Local = 'Parent Value';
+$page->FieldName_DoInherit = true;
+$value = $page->getResourcefulValue('FieldName');
+$this->assertEquals('Parent Value', $value);
+```
+
+### Integration Testing
+
+**Test CMS Field Generation**:
+```php
+$fields = $page->getCMSFields();
+$this->assertNotNull($fields->dataFieldByName('FieldName_DoInherit'));
+$this->assertNotNull($fields->dataFieldByName('FieldName_Source'));
+```
+
+**Test Inheritance Chain**:
+```php
+$grandparent->FieldName_Local = 'Grandparent';
+$parent->FieldName_DoInherit = true;
+$page->FieldName_DoInherit = true;
+$value = $page->getResourcefulValue('FieldName');
+$this->assertEquals('Grandparent', $value);
+```
+
+### Functional Testing
+
+**Test User Workflow**:
+1. Create page
+2. Check "Inherit from parent"
+3. Verify value matches parent
+4. Uncheck inheritance
+5. Select "Use site default"
+6. Verify value matches site
+7. Select "Use custom"
+8. Enter custom value
+9. Verify custom value used
+
+## Summary
+
+Resourceful is a configuration-driven inheritance system that:
+
+1. **Eliminates Boilerplate**: Replaces repetitive inheritance code with YAML config
+2. **Provides Consistent UX**: Same interface pattern for all inheritable fields
+3. **Supports Flexibility**: Multiple sources, custom methods, fallback chains
+4. **Integrates Seamlessly**: Works with elemental, multisite, and custom modules
+5. **Performs Well**: Lightweight with per-request caching
+6. **Debugs Easily**: Clear method chain for tracing issues
+
+**Key Takeaway**: Resourceful abstracts the inheritance pattern into configuration, making it trivial to add inheritable fields without writing boilerplate code.
+
