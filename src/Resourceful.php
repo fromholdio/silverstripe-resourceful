@@ -117,12 +117,16 @@ class Resourceful
     {
         $dObj = $this->getDataObject();
         $doInheritFieldName = $this->getDoInheritFieldName();
-        if ($dObj->hasField($doInheritFieldName)) {
-            $dObj->setField($doInheritFieldName, true);
+        if (!empty($doInheritFieldName)) {
+            if ($dObj->hasField($doInheritFieldName)) {
+                $dObj->setField($doInheritFieldName, true);
+            }
         }
         $sourceFieldName = $this->getSourceFieldName();
-        if ($dObj->hasField($sourceFieldName)) {
-            $dObj->setField($sourceFieldName, self::SOURCE_DEFAULT);
+        if (!empty($sourceFieldName)) {
+            if ($dObj->hasField($sourceFieldName)) {
+                $dObj->setField($sourceFieldName, self::SOURCE_DEFAULT);
+            }
         }
     }
 
@@ -138,9 +142,9 @@ class Resourceful
 
         $dObj = $this->getDataObject();
         $config = $dObj::config()->get('resourceful');
-        $namedData = $config[$name] ?? null;
+        $namedData = $config[$name] ?? [];
         if (!is_array($namedData)) {
-            return null;
+            $namedData = [];
         }
         $mergedData = $this->mergeWithDefaultConfigData($namedData);
 
@@ -253,14 +257,14 @@ class Resourceful
         return $this->getName();
     }
 
-    public function getDoInheritFieldName(): string
+    public function getDoInheritFieldName(): ?string
     {
         return $this->getConfigValue('values.{inherit}');
     }
 
-    public function getSourceFieldName(): string
+    public function getSourceFieldName(): ?string
     {
-        return $this->getConfigValue('values.{source}');
+        return $this->getConfigValue('values.{source}') ?? '';
     }
 
 
@@ -298,7 +302,8 @@ class Resourceful
         $dObj = $this->getDataObject();
         $inheritFieldName = $this->getDoInheritFieldName();
         $inheritSource = $this->getInheritSource();
-        return !empty($inheritSource)
+        return !empty($inheritFieldName)
+            && !empty($inheritSource)
             && $this->isSourceAvailable($inheritSource)
             && $dObj->hasField($inheritFieldName);
     }
@@ -308,6 +313,7 @@ class Resourceful
         $dObj = $this->getDataObject();
         $inheritFieldName = $this->getDoInheritFieldName();
         return $this->isInheritable()
+            && !empty($inheritFieldName)
             && $dObj->getField($inheritFieldName);
     }
 
@@ -370,6 +376,9 @@ class Resourceful
     public function getSelectedSource(): ?string
     {
         $fieldName = $this->getSourceFieldName();
+        if (empty($fieldName)) {
+            return null;
+        }
         $source = $this->getDataObject()->getField($fieldName);
         return empty($source) || $source === self::SOURCE_DEFAULT
             ? null
@@ -668,7 +677,9 @@ class Resourceful
         $doInheritField = null;
         if ($this->isInheritable()) {
             $doInheritField = $this->getDoInheritCMSField();
-            $fields->push($doInheritField);
+            if (!is_null($doInheritField)) {
+                $fields->push($doInheritField);
+            }
         }
 
         $sourceField = $this->getSourceCMSField();
@@ -682,12 +693,14 @@ class Resourceful
 
             if (!is_null($doInheritField)) {
                 $doInheritFieldName = $this->getDoInheritFieldName();
-                $sourceWrapper->displayIf($doInheritFieldName)->isNotChecked();
-                $sourceField->setTitle(' ');
+                if (!empty($doInheritFieldName)) {
+                    $sourceWrapper->displayIf($doInheritFieldName)->isNotChecked();
+                    $sourceField->setTitle(' ');
+                }
             }
 
             $sourceFieldName = $this->getSourceFieldName();
-            if (empty($dObj->getField($sourceFieldName))) {
+            if (empty($sourceFieldName) || empty($dObj->getField($sourceFieldName))) {
                 $dObj->setField($sourceFieldName, 'default');
             }
 
@@ -728,10 +741,13 @@ class Resourceful
         return $fields->count() > 0 ? $fields : null;
     }
 
-    public function getDoInheritCMSField(): CheckboxFieldGroup
+    public function getDoInheritCMSField(): ?CheckboxFieldGroup
     {
         $dObj = $this->getDataObject();
         $doInheritFieldName = $this->getDoInheritFieldName();
+        if (empty($doInheritFieldName)) {
+            return null;
+        }
         return CheckboxFieldGroup::create(
             $doInheritFieldName,
             $dObj->fieldLabel($doInheritFieldName),
@@ -746,7 +762,8 @@ class Resourceful
         $name = $this->getSourceFieldName();
         $class = $this->getSourceCMSFieldClass();
         $options = $this->getSourceCMSFieldOptions();
-        if (!is_null($class) && !is_null($options))
+
+        if (!empty($name) && !is_null($class) && !is_null($options))
         {
             if (count($options) === 1) {
                 $field = HiddenField::create(
@@ -820,14 +837,17 @@ class Resourceful
         $dObj = $this->getDataObject();
         $defaultSource = $this->getDefaultSource();
         $options = [];
-        foreach ($sources as $source)
-        {
-            $optionKey = !empty($defaultSource) && $defaultSource === $source
-                ? self::SOURCE_DEFAULT
-                : $source;
-            $options[$optionKey] = $dObj->fieldLabel(
-                $this->getSourceFieldName() . '_' . $source
-            );
+        $sourceFieldName = $this->getSourceFieldName();
+        if (!empty($sourceFieldName)) {
+            foreach ($sources as $source)
+            {
+                $optionKey = !empty($defaultSource) && $defaultSource === $source
+                    ? self::SOURCE_DEFAULT
+                    : $source;
+                $options[$optionKey] = $dObj->fieldLabel(
+                    $sourceFieldName . '_' . $source
+                );
+            }
         }
         return empty($options) ? null : $options;
     }
@@ -901,10 +921,14 @@ class Resourceful
 
     public function removeCMSFields(FieldList $fields): FieldList
     {
-        return $fields->removeByName([
-            $this->getDoInheritFieldName(),
-            $this->getSourceFieldName(),
-//            $this->getLocalFieldName()
-        ]);
+        $doInheritFieldName = $this->getDoInheritFieldName();
+        if (!empty($doInheritFieldName)) {
+            $fields->removeByName($doInheritFieldName);
+        }
+        $sourceFieldName = $this->getSourceFieldName();
+        if (!empty($sourceFieldName)) {
+            $fields->removeByName($sourceFieldName);
+        }
+        return $fields;
     }
 }
