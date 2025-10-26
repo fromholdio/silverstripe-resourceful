@@ -5,10 +5,12 @@ namespace Fromholdio\Resourceful;
 use Fromholdio\CheckboxFieldGroup\CheckboxFieldGroup;
 use Fromholdio\CMSFieldsPlacement\CMSFieldsPlacement;
 use Fromholdio\Resourceful\Extensions\ResourcefulExtension;
+use Fromholdio\Resourceful\Forms\InheritedSourcesField;
 use SilverStripe\Core\Config\Configurable;
 use SilverStripe\Core\Extensible;
 use SilverStripe\Core\Injector\Injectable;
 use SilverStripe\Core\Manifest\ModuleLoader;
+use SilverStripe\Forms\CompositeField;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\FormField;
 use SilverStripe\Forms\HiddenField;
@@ -677,9 +679,6 @@ class Resourceful
         $doInheritField = null;
         if ($this->isInheritable()) {
             $doInheritField = $this->getDoInheritCMSField();
-            if (!is_null($doInheritField)) {
-                $fields->push($doInheritField);
-            }
         }
 
         $sourceField = $this->getSourceCMSField();
@@ -689,13 +688,12 @@ class Resourceful
             $sourceWrapper->setName($sourceField->getName() . '_Wrapper');
 
             $sourceWrapper->push($sourceField);
-            $fields->push($sourceWrapper);
 
             if (!is_null($doInheritField)) {
                 $doInheritFieldName = $this->getDoInheritFieldName();
                 if (!empty($doInheritFieldName)) {
                     $sourceWrapper->displayIf($doInheritFieldName)->isNotChecked();
-                    $sourceField->setTitle(' ');
+                    $sourceField->setTitle(false);
                 }
             }
 
@@ -738,21 +736,40 @@ class Resourceful
                 }
             }
         }
+
+        if (!is_null($sourceWrapper))
+        {
+            if (is_null($doInheritFieldName)) {
+                $fields->push($sourceWrapper);
+            } else {
+                $doInheritField->push($sourceWrapper);
+            }
+        }
+
+        if (!is_null($doInheritField)) {
+            $fields->push($doInheritField);
+        }
+
         return $fields->count() > 0 ? $fields : null;
     }
 
-    public function getDoInheritCMSField(): ?CheckboxFieldGroup
+    public function getDoInheritCMSField(): ?CompositeField
     {
         $dObj = $this->getDataObject();
         $doInheritFieldName = $this->getDoInheritFieldName();
         if (empty($doInheritFieldName)) {
             return null;
         }
-        return CheckboxFieldGroup::create(
-            $doInheritFieldName,
-            $dObj->fieldLabel($doInheritFieldName),
-            $dObj->fieldLabel($doInheritFieldName . 'Group')
+        $field = InheritedSourcesField::create(
+            CheckboxFieldGroup::create(
+                $doInheritFieldName,
+                $dObj->fieldLabel($doInheritFieldName),
+                false,
+            )
         );
+        $field->setName($doInheritFieldName . 'Wrapper');
+        $field->setTitle($dObj->fieldLabel($doInheritFieldName . 'Wrapper'));
+        return $field;
     }
 
     public function getSourceCMSField(): ?FormField
