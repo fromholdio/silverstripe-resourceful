@@ -7,16 +7,16 @@ This document provides comprehensive technical details about the Resourceful mod
 ### Core Components
 
 1. **Resourceful Class** (`src/Resourceful.php`)
-   - Singleton-based factory pattern
-   - Configuration-driven behavior
-   - Handles value retrieval and source resolution
-   - Generates CMS fields automatically
+    - Singleton-based factory pattern
+    - Configuration-driven behavior
+    - Handles value retrieval and source resolution
+    - Generates CMS fields automatically
 
 2. **ResourcefulExtension** (`src/Extensions/ResourcefulExtension.php`)
-   - Applied to DataObjects that use resourceful fields
-   - Provides convenience methods
-   - Hooks into CMS field generation
-   - Sets field defaults on object creation
+    - Applied to DataObjects that use resourceful fields
+    - Provides convenience methods
+    - Hooks into CMS field generation
+    - Sets field defaults on object creation
 
 ### Design Philosophy
 
@@ -120,13 +120,34 @@ DataObject:
 ### Source Types
 
 **Built-in Sources**:
-- `SOURCE_LOCAL` = 'local' - Value stored on current object
-- `SOURCE_PARENT` = 'parent' - Inherited from parent object
-- `SOURCE_SITE` = 'site' - Site-wide default
-- `SOURCE_DEFAULT` = 'default' - Use configured default source
+- `SOURCE_LOCAL` = 'local' - Value from dedicated local storage field (e.g., `FieldName_Local`)
+- `SOURCE_PARENT` = 'parent' - Inherited from parent object via relation traversal
+- `SOURCE_SITE` = 'site' - Site-wide default via relation traversal
+- `SOURCE_DEFAULT` = 'default' - Placeholder that resolves to configured default source
 - `SOURCE_NONE` = 'none' - No value (null)
 
 **Custom Sources**: Any string can be a source if configured in `values` or `relations`.
+
+### Understanding Source Semantics
+
+**Important Distinction**: Source names describe **where the value comes from**, not necessarily **which object** it's on.
+
+| Source | Object | Field/Method | Traversal |
+|--------|--------|--------------|-----------|
+| `'local'` | Current object | `FieldName_Local` field | None |
+| `'parent'` | Parent object | `FieldName` field/method | Via Parent relation |
+| `'site'` | Site object | `FieldName` field/method | Via Site relation |
+| `'page'` (custom) | Current object | Custom field (e.g., `Title`) | None |
+
+**Key Insight**: Both `'local'` and custom sources like `'page'` get values from the **current object**, but from **different fields**:
+- `'local'` = the dedicated storage field for custom values
+- `'page'` (custom) = a different existing field on the same object
+
+**SOURCE_DEFAULT Behavior**:
+- Not a real source - it's a **placeholder/alias**
+- When user selects "Default" in CMS, the `FieldName_Source` field stores `'default'`
+- `getSourceValue()` resolves `'default'` to the actual configured default source
+- Allows changing default source in config without database migration
 
 ### Source Resolution Flow
 
@@ -143,25 +164,25 @@ getSource()
 **Key Methods**:
 
 1. **`getSource(): ?string`**
-   - Returns the current active source
-   - Respects force > inherit > selected > default priority
+    - Returns the current active source
+    - Respects force > inherit > selected > default priority
 
 2. **`getForceSource(): ?string`**
-   - Returns forced source from config
-   - Supports array of sources (tries each until available)
-   - Returns null if not forced
+    - Returns forced source from config
+    - Supports array of sources (tries each until available)
+    - Returns null if not forced
 
 3. **`getInheritSource(): ?string`**
-   - Returns source to inherit from (usually 'parent')
-   - Only used when `isInherited()` returns true
+    - Returns source to inherit from (usually 'parent')
+    - Only used when `isInherited()` returns true
 
 4. **`getSelectedSource(): ?string`**
-   - Returns user-selected source from `{source}` field
-   - Returns null if field empty or set to 'default'
+    - Returns user-selected source from `{source}` field
+    - Returns null if field empty or set to 'default'
 
 5. **`getDefaultSource(): ?string`**
-   - Returns configured default source
-   - Fallback when no source selected
+    - Returns configured default source
+    - Fallback when no source selected
 
 ### Source Availability
 
@@ -172,9 +193,9 @@ Checks if a source can be used:
 1. **Special sources**: 'none' and 'default' are always available
 2. **Field sources**: Check if field exists via `getFieldNameForSource()`
 3. **Method sources**: Check if method exists via `getMethodNameForSource()`
-4. **Relation sources**: 
-   - If required (in `{require}`), check relation exists
-   - Otherwise, check relation name/method exists
+4. **Relation sources**:
+    - If required (in `{require}`), check relation exists
+    - Otherwise, check relation name/method exists
 5. **Site source**: Check if `getFallbackSite()` returns object
 
 **Required Relations** (`{require}` config):
@@ -201,33 +222,56 @@ getValue()
 **Key Methods**:
 
 1. **`getValue()`**
-   - Main entry point for value retrieval
-   - Returns null if not enabled
-   - Delegates to `getSourceValue()`
+    - Main entry point for value retrieval
+    - Returns null if not enabled
+    - Delegates to `getSourceValue()`
 
 2. **`getSourceValue(?string $source)`**
-   - Retrieves value from specific source
-   - Handles 'default' and 'none' special cases
-   - Tries method > field > relation in order
-   - Recursively traverses relations
+    - Retrieves value from specific source
+    - Handles 'default' and 'none' special cases
+    - **Tries method > field > relation in order** (this order is critical!)
+    - Recursively traverses relations
 
 3. **`getMethodNameForSource(string $source)`**
-   - Returns method name for source from `values` config
-   - Methods prefixed with `->` in config
-   - Checks if method exists on DataObject
-   - Returns null if no method configured/exists
+    - Returns method name for source from `values` config
+    - Methods prefixed with `->` in config
+    - Checks if method exists on DataObject
+    - Returns null if no method configured/exists
 
 4. **`getFieldNameForSource(string $source)`**
-   - Returns field name for source from `values` config
-   - Fields are plain strings (no `->` prefix)
-   - Checks if field exists and is not a relation
-   - Returns null if no field configured/exists
+    - Returns field name for source from `values` config
+    - Fields are plain strings (no `->` prefix)
+    - Checks if field exists and is not a relation
+    - Returns null if no field configured/exists
 
 5. **`getSourceRelation(?string $source): ?DataObject`**
-   - Returns related object for source
-   - Tries relation method > relation name > site fallback
-   - Returns null if relation doesn't exist
-   - Used for recursive value retrieval
+    - Returns related object for source
+    - Tries relation method > relation name > site fallback
+    - Returns null if relation doesn't exist
+    - Used for recursive value retrieval
+
+### Critical: Method > Field > Relation Priority
+
+**The order in `getSourceValue()` is crucial**:
+
+1. **First**: Check for method mapping in `values` config
+    - If found and method exists, call it on **current object**
+    - Return the result
+
+2. **Second**: Check for field mapping in `values` config
+    - If found and field exists, get it from **current object**
+    - Return the value
+
+3. **Third**: Check for relation mapping in `relations` config
+    - If found and relation exists, **traverse to related object**
+    - Create new Resourceful instance for related object
+    - Recursively call `getValue()` on it
+    - Return the result
+
+**Why This Matters**:
+- `values` config = get from **current object** (no traversal)
+- `relations` config = get from **different object** (traversal)
+- If both are configured for same source, `values` takes precedence
 
 ### Fallback Chains
 
@@ -287,14 +331,14 @@ getSourceValue('parent')
 
 **Inheritance Enabled When**:
 1. `isInheritable()` returns true:
-   - DoInherit field name configured
-   - Inherit source configured
-   - Inherit source is available
-   - DataObject has DoInherit field
+    - DoInherit field name configured
+    - Inherit source configured
+    - Inherit source is available
+    - DataObject has DoInherit field
 
 2. `isInherited()` returns true:
-   - `isInheritable()` is true
-   - DoInherit field value is true
+    - `isInheritable()` is true
+    - DoInherit field value is true
 
 **Inheritance Flow**:
 ```
@@ -365,13 +409,58 @@ getCMSFields()
 
 **Generated When**: `isInheritable()` returns true
 
-**Field Type**: CheckboxFieldGroup (from fromholdio/silverstripe-checkboxfieldgroup)
+**Field Type**: InheritedSourcesField wrapping CheckboxFieldGroup
 
 **Field Name**: From `getDoInheritFieldName()`
 
 **Labels**: From `fieldLabel()` on DataObject
 
 **Display Logic**: None (always visible when inheritable)
+
+**Inherited Value Display** (New Feature):
+- Calls `getInheritedValue()` to get the value that would be inherited
+- Checks for custom method: `getCMSField_{FieldName}_InheritedValue($fieldName, $value)`
+- If method exists, calls it to generate a readonly field showing the inherited value
+- Field is wrapped in DisplayLogic to show only when DoInherit is checked
+- Allows users to see what value they'll get before checking the inherit checkbox
+
+**Example Implementation**:
+```php
+public function getCMSField_HeroHeadline_InheritedValue(
+    string $fieldName,
+    mixed $value
+): ReadonlyField {
+    return ReadonlyField::create(
+        $fieldName,
+        $this->fieldLabel($fieldName),
+        $value
+    );
+}
+```
+
+**Method Signature**:
+- `$fieldName`: The field name to use (e.g., `HeroHeadline_DoInherit_Value`)
+- `$value`: The inherited value from `getInheritedValue()`
+- Returns: FormField (typically ReadonlyField or TextareaField with readonly=true)
+
+**getInheritedValue() Implementation**:
+```php
+public function getInheritedValue(): mixed
+{
+    if (!$this->isInherited()) {
+        return '';
+    }
+    $source = $this->getInheritSource();
+    return $this->getSourceValue($source);
+}
+```
+
+**Why This Works**:
+- Simply delegates to `getSourceValue()` which already handles both:
+    - Field-based sources (gets from current object)
+    - Relation-based sources (traverses to related object)
+- No need for special logic or relation traversal
+- Works for all source types (parent, site, custom fields, etc.)
 
 ### Source Field
 
@@ -529,6 +618,58 @@ public function getResourcefulArea(string $name): ?EvoElementalArea
 **Result**: Infinite recursion, PHP fatal error
 
 **Solution**: Don't create circular parent relationships (SilverStripe prevents this at tree level)
+
+### 1a. Same-Object Circular Reference (Common Mistake!)
+
+**Scenario**: Configuring a custom source to inherit from the same object via relation
+
+**Example of Wrong Config**:
+```yaml
+Page:
+  resourceful:
+    HeroHeadline:
+      sources:
+        inherit: 'page'
+      relations:
+        page: '->getCurrentPage'  # Returns $this->owner
+```
+
+```php
+public function getCurrentPage(): SiteTree
+{
+    return $this->owner;  // Same object!
+}
+```
+
+**What Happens**:
+1. `getSourceValue('page')` finds relation mapping
+2. Calls `getCurrentPage()` → returns same object
+3. Creates new Resourceful for same object with same field name
+4. Calls `getValue()` → still inheriting
+5. Calls `getSourceValue('page')` again
+6. **Infinite loop!**
+
+**Error**: `Xdebug has detected a possible infinite loop, and aborted your script with a stack depth of '512' frames`
+
+**The Fix**: Use `values` config instead of `relations`:
+```yaml
+Page:
+  resourceful:
+    HeroHeadline:
+      sources:
+        inherit: 'page'
+      values:
+        page: 'Title'  # Get Title field from current object
+```
+
+**Why This Works**:
+- `values` config → `getSourceValue()` calls `$page->getField('Title')` on current object
+- No relation traversal, no new Resourceful instance, no recursion
+- Returns the field value directly
+
+**Rule of Thumb**:
+- Use `values` when getting from **current object** (different field)
+- Use `relations` when getting from **different object** (traversal)
 
 ### 2. Missing Relations
 
@@ -745,7 +886,58 @@ Page:
 
 **Use Case**: Complex logic for retrieving site defaults
 
-### Pattern 5: Multiple Fallbacks
+### Pattern 5: Inherit from Current Object Field
+
+```yaml
+Page:
+  resourceful:
+    HeroHeadline:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        page: 'Title'  # Get from Title field on current object
+    HeroLede:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        page: 'Lede'  # Get from Lede field on current object
+```
+
+**Use Case**: Allow users to "inherit" from a different field on the same object (e.g., use page title as hero headline)
+
+**How It Works**:
+- When `DoInherit=true`, source becomes `'page'`
+- `getSourceValue('page')` checks for field mapping
+- Finds `'page' => 'Title'` in `values` config
+- Calls `$page->getField('Title')` on **current object**
+- No relation traversal, no recursion
+
+**Common Mistake**: Configuring this as a relation instead of a value:
+```yaml
+# ❌ WRONG - Creates infinite loop!
+relations:
+  page: '->getCurrentPage'  # Returns $this->owner
+
+# ✅ CORRECT - Gets field from current object
+values:
+  page: 'Title'
+```
+
+**Why Wrong Config Causes Infinite Loop**:
+1. `getSourceValue('page')` finds relation mapping
+2. Calls `getCurrentPage()` which returns same object
+3. Creates new Resourceful for same object
+4. Calls `getValue()` which checks if inheriting
+5. Still inheriting, so calls `getSourceValue('page')` again
+6. Infinite recursion!
+
+**The Fix**: Use `values` config for same-object fields, `relations` config only for different objects.
+
+### Pattern 6: Multiple Fallbacks
 
 ```yaml
 Page:
@@ -850,3 +1042,31 @@ Resourceful is a configuration-driven inheritance system that:
 
 **Key Takeaway**: Resourceful abstracts the inheritance pattern into configuration, making it trivial to add inheritable fields without writing boilerplate code.
 
+## Critical Concepts for AI Assistants
+
+### 1. Source Semantics
+- Source names describe **where values come from**, not which object they're on
+- `'local'` = dedicated storage field on current object
+- `'parent'`/`'site'` = traverse to different object
+- Custom sources can get from current object (via `values`) OR different object (via `relations`)
+
+### 2. Values vs Relations
+- **`values` config**: Get from **current object** (field or method)
+- **`relations` config**: Get from **different object** (traverse and recurse)
+- If both configured for same source, `values` takes precedence
+
+### 3. Common Pitfall: Same-Object Circular Reference
+- **Wrong**: Using `relations` to point to same object
+- **Right**: Using `values` to get different field from same object
+- **Error symptom**: Infinite loop with 512 stack frames
+
+### 4. getInheritedValue() Simplicity
+- Don't manually traverse relations
+- Just call `getSourceValue($source)` - it handles everything
+- Works for both field-based and relation-based sources
+
+### 5. Inherited Value Display
+- New feature: Show inherited value in readonly field
+- Implement `getCMSField_{FieldName}_InheritedValue($fieldName, $value)`
+- Field appears when DoInherit checkbox is checked
+- Helps users see what they'll get before enabling inheritance
