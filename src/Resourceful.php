@@ -15,7 +15,6 @@ use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\FormField;
 use SilverStripe\Forms\HiddenField;
 use SilverStripe\Forms\OptionsetField;
-use SilverStripe\Forms\ReadonlyField;
 use SilverStripe\Forms\SingleSelectField;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\SiteConfig\SiteConfig;
@@ -53,7 +52,7 @@ class Resourceful
         'relations' => [
             self::SOURCE_PARENT => 'Parent',
             self::SOURCE_SITE => 'Site',
-            '{require}' => self::SOURCE_PARENT .'|' .self::SOURCE_SITE
+            '{require}' => self::SOURCE_PARENT . '|' . self::SOURCE_SITE
         ],
         'source_field_class' => OptionsetField::class,
         'cms_fields' => null,
@@ -119,10 +118,12 @@ class Resourceful
     public function setFieldDefaults(): void
     {
         $dObj = $this->getDataObject();
-        $doInheritFieldName = $this->getDoInheritFieldName();
-        if (!empty($doInheritFieldName)) {
-            if ($dObj->hasField($doInheritFieldName)) {
-                $dObj->setField($doInheritFieldName, true);
+        if (!$this->isInheritForced()) {
+            $doInheritFieldName = $this->getDoInheritFieldName();
+            if (!empty($doInheritFieldName)) {
+                if ($dObj->hasField($doInheritFieldName)) {
+                    $dObj->setField($doInheritFieldName, true);
+                }
             }
         }
         $sourceFieldName = $this->getSourceFieldName();
@@ -151,8 +152,7 @@ class Resourceful
         }
         $mergedData = $this->mergeWithDefaultConfigData($namedData);
 
-        foreach ($mergedData as $key => $value)
-        {
+        foreach ($mergedData as $key => $value) {
             if (is_array($value)) {
                 foreach ($value as $subKey => $subValue) {
                     if (is_string($subValue) && str_contains($subValue, '|')) {
@@ -160,8 +160,7 @@ class Resourceful
                         $mergedData[$key][$subKey] = $subValue;
                     }
                 }
-            }
-            elseif (is_string($value) && str_contains($value, '|')) {
+            } elseif (is_string($value) && str_contains($value, '|')) {
                 $value = explode('|', $value);
                 $mergedData[$key] = $value;
             }
@@ -175,13 +174,11 @@ class Resourceful
     {
         $dObj = $this->getDataObject();
         $defaultData = static::config()->get('default_config');
-        foreach ($defaultData['values'] as $key => $value)
-        {
+        foreach ($defaultData['values'] as $key => $value) {
             $newValue = str_replace('{field_name}', $this->getName(), $value);
             $defaultData['values'][$key] = $newValue;
         }
-        foreach ($defaultData['relations'] as $key => $value)
-        {
+        foreach ($defaultData['relations'] as $key => $value) {
             $newValue = str_replace('{field_name}', $this->getName(), $value);
             unset($defaultData['relations'][$key]);
             if ($key !== self::SOURCE_LOCAL || !is_null($dObj->getRelationType($newValue))) {
@@ -195,20 +192,16 @@ class Resourceful
     {
         $defaultData = $this->getDefaultConfigData();
         $mergedData = [];
-        foreach ($defaultData as $key => $value)
-        {
-            if (isset($namedData[$key]))
-            {
+        foreach ($defaultData as $key => $value) {
+            if (isset($namedData[$key])) {
                 $namedValue = $namedData[$key];
                 if (is_array($value) && is_array($namedValue)) {
                     $mergedValue = array_merge($value, $namedValue);
                     $mergedData[$key] = $mergedValue;
-                }
-                else {
+                } else {
                     $mergedData[$key] = $namedValue;
                 }
-            }
-            else {
+            } else {
                 $mergedData[$key] = $value;
             }
         }
@@ -224,8 +217,7 @@ class Resourceful
             return null;
         }
 
-        if (str_contains($key, '.'))
-        {
+        if (str_contains($key, '.')) {
             $keyParts = explode('.', $key);
             $key = $keyParts[0];
             unset($keyParts[0]);
@@ -233,16 +225,13 @@ class Resourceful
         }
 
         $value = $data[$key] ?? null;
-        if (!empty($value))
-        {
-            if (!empty($keyExtra))
-            {
+        if (!empty($value)) {
+            if (!empty($keyExtra)) {
                 if (is_array($value)) {
                     return $this->getConfigValue($keyExtra, $value);
                 }
                 $value = null;
-            }
-            elseif (is_string($value) && str_contains($value, '|')) {
+            } elseif (is_string($value) && str_contains($value, '|')) {
                 $value = explode('|', $value);
             }
         }
@@ -262,7 +251,11 @@ class Resourceful
 
     public function getDoInheritFieldName(): ?string
     {
-        return $this->getConfigValue('values.{inherit}');
+        $inheritConfig = $this->getConfigValue('values.{inherit}');
+        if ($inheritConfig === true) {
+            return null;
+        }
+        return $inheritConfig;
     }
 
     public function getSourceFieldName(): ?string
@@ -274,12 +267,10 @@ class Resourceful
     public function getSource(): ?string
     {
         $source = $this->getForceSource();
-        if (is_null($source))
-        {
+        if (is_null($source)) {
             if ($this->isInherited()) {
                 $source = $this->getInheritSource();
-            }
-            else {
+            } else {
                 $source = $this->getSelectedSource();
                 if (is_null($source) || !$this->isSourceAvailable($source)) {
                     $source = $this->getDefaultSource();
@@ -303,16 +294,26 @@ class Resourceful
     public function isInheritable(): bool
     {
         $dObj = $this->getDataObject();
-        $inheritFieldName = $this->getDoInheritFieldName();
+        $inheritConfig = $this->getConfigValue('values.{inherit}');
         $inheritSource = $this->getInheritSource();
-        return !empty($inheritFieldName)
+        return ($inheritConfig === true || is_string($inheritConfig))
+            && !empty($inheritConfig)
             && !empty($inheritSource)
             && $this->isSourceAvailable($inheritSource)
-            && $dObj->hasField($inheritFieldName);
+            && (is_bool($inheritConfig) || $dObj->hasField($inheritConfig));
+    }
+
+    public function isInheritForced(): bool
+    {
+        $inheritConfig = $this->getConfigValue('values.{inherit}');
+        return $inheritConfig === true;
     }
 
     public function isInherited(): bool
     {
+        if ($this->isInheritForced()) {
+            return $this->isInheritable();
+        }
         $dObj = $this->getDataObject();
         $inheritFieldName = $this->getDoInheritFieldName();
         return $this->isInheritable()
@@ -359,8 +360,7 @@ class Resourceful
         $source = $this->getConfigValue('sources.force');
         if (empty($source)) {
             $source = null;
-        }
-        elseif (is_array($source)) {
+        } elseif (is_array($source)) {
             $force = reset($source);
             foreach ($source as $sourcePart) {
                 if ($this->isSourceAvailable($sourcePart)) {
@@ -481,14 +481,12 @@ class Resourceful
         $manifest = ModuleLoader::inst()->getManifest();
         $multisitesExists = $manifest->moduleExists('symbiote/silverstripe-multisites')
             || $manifest->moduleExists('fromholdio/silverstripe-configured-multisites');
-        if ($multisitesExists)
-        {
+        if ($multisitesExists) {
             $dObj = $this->getDataObject();
             if (!is_null($dObj->getRelationType('Site'))) {
                 $site = $dObj->Site();
             }
-        }
-        else {
+        } else {
             $site = SiteConfig::current_site_config();
         }
         return $site && $site->exists() && $site->hasExtension(ResourcefulExtension::class)
@@ -505,14 +503,12 @@ class Resourceful
             $methodNames = [$methodNames];
         }
         foreach ($methodNames as $methodName) {
-            if (is_string($methodName) && mb_strpos($methodName, '->') === 0)
-            {
+            if (is_string($methodName) && mb_strpos($methodName, '->') === 0) {
                 $methodName = mb_substr($methodName, 2);
                 if ($this->getDataObject()->hasMethod($methodName)) {
                     break;
                 }
-            }
-            elseif ($methodName === false) {
+            } elseif ($methodName === false) {
                 break;
             }
             $methodName = null;
@@ -528,14 +524,12 @@ class Resourceful
             $fieldNames = [$fieldNames];
         }
         foreach ($fieldNames as $fieldName) {
-            if (is_string($fieldName) && mb_strpos($fieldName, '->') !== 0)
-            {
+            if (is_string($fieldName) && mb_strpos($fieldName, '->') !== 0) {
                 $dObj = $this->getDataObject();
                 if ($dObj->hasField($fieldName) && is_null($dObj->getRelationType($fieldName))) {
                     break;
                 }
-            }
-            elseif ($fieldName === false) {
+            } elseif ($fieldName === false) {
                 break;
             }
             $fieldName = null;
@@ -551,14 +545,12 @@ class Resourceful
             $methodNames = [$methodNames];
         }
         foreach ($methodNames as $methodName) {
-            if (is_string($methodName) && mb_strpos($methodName, '->') === 0)
-            {
+            if (is_string($methodName) && mb_strpos($methodName, '->') === 0) {
                 $methodName = mb_substr($methodName, 2);
                 if ($this->getDataObject()->hasMethod($methodName)) {
                     break;
                 }
-            }
-            elseif ($methodName === false) {
+            } elseif ($methodName === false) {
                 break;
             }
             $methodName = null;
@@ -574,13 +566,11 @@ class Resourceful
             $relationNames = [$relationNames];
         }
         foreach ($relationNames as $relationName) {
-            if (is_string($relationName) && mb_strpos($relationName, '->') !== 0)
-            {
+            if (is_string($relationName) && mb_strpos($relationName, '->') !== 0) {
                 if (!is_null($this->getDataObject()->getRelationType($relationName))) {
                     break;
                 }
-            }
-            elseif ($relationName === false) {
+            } elseif ($relationName === false) {
                 break;
             }
             $relationName = null;
@@ -605,8 +595,7 @@ class Resourceful
         if (!is_null($methodName)) {
             return $methodName !== false;
         }
-        if ($this->isSourceRelationRequired($source))
-        {
+        if ($this->isSourceRelationRequired($source)) {
             $relation = $this->getSourceRelation($source);
             return !is_null($relation);
         }
@@ -687,13 +676,12 @@ class Resourceful
         }
 
         $doInheritField = null;
-        if ($this->isInheritable()) {
+        if ($this->isInheritCMSFieldEnabled()) {
             $doInheritField = $this->getDoInheritCMSField();
         }
 
         $sourceField = $this->getSourceCMSField();
-        if (!is_null($sourceField))
-        {
+        if (!is_null($sourceField)) {
             $sourceWrapper = Wrapper::create();
             $sourceWrapper->setName($sourceField->getName() . '_Wrapper');
 
@@ -713,8 +701,7 @@ class Resourceful
             }
 
             $defaultSource = $this->getDefaultSource();
-            if (is_a($sourceField, HiddenField::class, false))
-            {
+            if (is_a($sourceField, HiddenField::class, false)) {
                 $source = $sourceField->getValue();
                 if ($source === self::SOURCE_DEFAULT) {
                     $source = $defaultSource;
@@ -725,15 +712,12 @@ class Resourceful
                         $sourceWrapper->push($sourceFieldItem);
                     }
                 }
-            }
-            else {
+            } else {
                 $sources = $this->getAvailableSources();
                 if (!is_null($sources)) {
-                    foreach ($sources as $source)
-                    {
+                    foreach ($sources as $source) {
                         $sourceFieldList = $this->getCMSFieldsForSource($source);
-                        if (!is_null($sourceFieldList))
-                        {
+                        if (!is_null($sourceFieldList)) {
                             $sourceFieldsWrapper = Wrapper::create($sourceFieldList);
                             $sourceFieldsWrapper->setName($sourceFieldName . '_' . $source . '_Wrapper');
 
@@ -747,8 +731,7 @@ class Resourceful
             }
         }
 
-        if (!is_null($sourceWrapper))
-        {
+        if (!is_null($sourceWrapper)) {
             if (is_null($doInheritFieldName)) {
                 $fields->push($sourceWrapper);
             } else {
@@ -761,6 +744,11 @@ class Resourceful
         }
 
         return $fields->count() > 0 ? $fields : null;
+    }
+
+    public function isInheritCMSFieldEnabled(): bool
+    {
+        return $this->isInheritable() && !$this->isInheritForced();
     }
 
     public function getDoInheritCMSField(): ?CompositeField
@@ -965,9 +953,11 @@ class Resourceful
 
     public function removeCMSFields(FieldList $fields): FieldList
     {
-        $doInheritFieldName = $this->getDoInheritFieldName();
-        if (!empty($doInheritFieldName)) {
-            $fields->removeByName($doInheritFieldName);
+        if (!$this->isInheritForced()) {
+            $doInheritFieldName = $this->getDoInheritFieldName();
+            if (!empty($doInheritFieldName)) {
+                $fields->removeByName($doInheritFieldName);
+            }
         }
         $sourceFieldName = $this->getSourceFieldName();
         if (!empty($sourceFieldName)) {
