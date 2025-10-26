@@ -15,6 +15,7 @@ use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\FormField;
 use SilverStripe\Forms\HiddenField;
 use SilverStripe\Forms\OptionsetField;
+use SilverStripe\Forms\ReadonlyField;
 use SilverStripe\Forms\SingleSelectField;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\SiteConfig\SiteConfig;
@@ -329,6 +330,15 @@ class Resourceful
             $source = null;
         }
         return $source;
+    }
+
+    public function getInheritedValue(): mixed
+    {
+        if (!$this->isInherited()) {
+            return '';
+        }
+        $source = $this->getInheritSource();
+        return $this->getSourceValue($source) ?? '';
     }
 
 
@@ -760,15 +770,32 @@ class Resourceful
         if (empty($doInheritFieldName)) {
             return null;
         }
+
         $field = InheritedSourcesField::create(
             CheckboxFieldGroup::create(
                 $doInheritFieldName,
                 $dObj->fieldLabel($doInheritFieldName),
                 false,
-            )
+            ),
         );
         $field->setName($doInheritFieldName . 'Wrapper');
         $field->setTitle($dObj->fieldLabel($doInheritFieldName . 'Wrapper'));
+
+        $fieldName = $this->getFieldName();
+        $inheritedValueMethod = 'getCMSField_'. $fieldName . '_InheritedValue';
+        $inheritedValue = $this->getInheritedValue();
+        if ($dObj->hasMethod($inheritedValueMethod)) {
+            $inheritedValueFieldName = $doInheritFieldName . '_Value';
+            $inheritedValueField = $dObj->{$inheritedValueMethod}($inheritedValueFieldName, $inheritedValue);
+            if (!empty($inheritedValueField)) {
+                $inheritedValueWrapper = Wrapper::create(
+                    $inheritedValueField
+                )->setName($doInheritFieldName . '_Value_Wrapper');
+                $inheritedValueWrapper->displayIf($doInheritFieldName)->isChecked();
+                $field->push($inheritedValueWrapper);
+            }
+        }
+
         return $field;
     }
 
