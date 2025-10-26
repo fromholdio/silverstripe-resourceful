@@ -283,6 +283,18 @@ values:
   local: '->getFieldName|FieldName_Local'  # Try method first, then field
 ```
 
+**Forced inheritance** (set `{inherit}` to `true`):
+```yaml
+values:
+  '{inherit}': true  # Force inheritance, no checkbox shown
+```
+
+When `'{inherit}': true`:
+- No DoInherit checkbox shown in CMS
+- Inheritance always active (automatic fallback)
+- Local field still shown for user input
+- No DoInherit database field needed
+
 ### Relation Configuration
 
 **Relation names**:
@@ -530,6 +542,55 @@ Page:
     SidebarArea:
       sources:
         force: 'parent|site'  # Try parent, fallback to site
+```
+
+### Forced Inheritance (No Checkbox)
+
+Force inheritance without showing a checkbox:
+
+```yaml
+Page:
+  resourceful:
+    HeroHeadline:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        '{inherit}': true  # Force inheritance, no checkbox
+        page: 'Title'  # Inherit from Title field
+```
+
+**Result**:
+- No DoInherit checkbox shown
+- Only local text field shown
+- Inheritance always active (automatic fallback)
+- When local field is empty, uses Title field value
+- No DoInherit database field needed
+
+**Use Case**: Automatic fallback to another field without user choice (e.g., use page title as hero headline if custom headline is empty)
+
+**Database Fields**:
+```php
+private static $db = [
+    'HeroHeadline_Local' => 'Varchar(255)',  // Only local field needed
+];
+```
+
+**Comparison with Optional Inheritance**:
+
+```yaml
+# Optional inheritance (shows checkbox)
+HeroLede:
+  values:
+    '{inherit}': 'HeroLede_DoInherit'  # Field name = checkbox shown
+    page: 'Lede'
+
+# Forced inheritance (no checkbox)
+HeroHeadline:
+  values:
+    '{inherit}': true  # Boolean true = no checkbox
+    page: 'Title'
 ```
 
 ### Disabling Auto-Placement
@@ -878,6 +939,59 @@ class Page extends SiteTree
 ```
 
 **Result**: Both sidebar and footer areas can independently inherit from parent or use site defaults.
+
+### Example 4: Forced Inheritance for Hero Fields
+
+```yaml
+Page:
+  resourceful:
+    HeroHeadline:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        '{inherit}': true  # Forced inheritance
+        page: 'Title'
+      cms_fields:
+        tab_path: 'Root.HeroTabSet.HeroMainTab'
+
+    HeroLede:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        '{inherit}': 'HeroLede_DoInherit'  # Optional inheritance
+        page: 'Lede'
+      cms_fields:
+        tab_path: 'Root.HeroTabSet.HeroMainTab'
+```
+
+```php
+class Page extends SiteTree
+{
+    private static $db = [
+        'HeroHeadline_Local' => 'Varchar(255)',  // No DoInherit field
+        'HeroLede_DoInherit' => 'Boolean',       // Has DoInherit field
+        'HeroLede_Local' => 'Text',
+    ];
+
+    public function getHeroHeadline(): string
+    {
+        return $this->getResourcefulValue('HeroHeadline');
+    }
+
+    public function getHeroLede(): string
+    {
+        return $this->getResourcefulValue('HeroLede');
+    }
+}
+```
+
+**Result**:
+- **HeroHeadline**: Always falls back to page Title if empty (no checkbox)
+- **HeroLede**: User can choose to inherit from page Lede or use custom (checkbox shown)
 
 ## License
 

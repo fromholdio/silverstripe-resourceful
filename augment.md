@@ -7,16 +7,16 @@ This document provides comprehensive technical details about the Resourceful mod
 ### Core Components
 
 1. **Resourceful Class** (`src/Resourceful.php`)
-    - Singleton-based factory pattern
-    - Configuration-driven behavior
-    - Handles value retrieval and source resolution
-    - Generates CMS fields automatically
+   - Singleton-based factory pattern
+   - Configuration-driven behavior
+   - Handles value retrieval and source resolution
+   - Generates CMS fields automatically
 
 2. **ResourcefulExtension** (`src/Extensions/ResourcefulExtension.php`)
-    - Applied to DataObjects that use resourceful fields
-    - Provides convenience methods
-    - Hooks into CMS field generation
-    - Sets field defaults on object creation
+   - Applied to DataObjects that use resourceful fields
+   - Provides convenience methods
+   - Hooks into CMS field generation
+   - Sets field defaults on object creation
 
 ### Design Philosophy
 
@@ -164,25 +164,25 @@ getSource()
 **Key Methods**:
 
 1. **`getSource(): ?string`**
-    - Returns the current active source
-    - Respects force > inherit > selected > default priority
+   - Returns the current active source
+   - Respects force > inherit > selected > default priority
 
 2. **`getForceSource(): ?string`**
-    - Returns forced source from config
-    - Supports array of sources (tries each until available)
-    - Returns null if not forced
+   - Returns forced source from config
+   - Supports array of sources (tries each until available)
+   - Returns null if not forced
 
 3. **`getInheritSource(): ?string`**
-    - Returns source to inherit from (usually 'parent')
-    - Only used when `isInherited()` returns true
+   - Returns source to inherit from (usually 'parent')
+   - Only used when `isInherited()` returns true
 
 4. **`getSelectedSource(): ?string`**
-    - Returns user-selected source from `{source}` field
-    - Returns null if field empty or set to 'default'
+   - Returns user-selected source from `{source}` field
+   - Returns null if field empty or set to 'default'
 
 5. **`getDefaultSource(): ?string`**
-    - Returns configured default source
-    - Fallback when no source selected
+   - Returns configured default source
+   - Fallback when no source selected
 
 ### Source Availability
 
@@ -193,9 +193,9 @@ Checks if a source can be used:
 1. **Special sources**: 'none' and 'default' are always available
 2. **Field sources**: Check if field exists via `getFieldNameForSource()`
 3. **Method sources**: Check if method exists via `getMethodNameForSource()`
-4. **Relation sources**:
-    - If required (in `{require}`), check relation exists
-    - Otherwise, check relation name/method exists
+4. **Relation sources**: 
+   - If required (in `{require}`), check relation exists
+   - Otherwise, check relation name/method exists
 5. **Site source**: Check if `getFallbackSite()` returns object
 
 **Required Relations** (`{require}` config):
@@ -222,51 +222,51 @@ getValue()
 **Key Methods**:
 
 1. **`getValue()`**
-    - Main entry point for value retrieval
-    - Returns null if not enabled
-    - Delegates to `getSourceValue()`
+   - Main entry point for value retrieval
+   - Returns null if not enabled
+   - Delegates to `getSourceValue()`
 
 2. **`getSourceValue(?string $source)`**
-    - Retrieves value from specific source
-    - Handles 'default' and 'none' special cases
-    - **Tries method > field > relation in order** (this order is critical!)
-    - Recursively traverses relations
+   - Retrieves value from specific source
+   - Handles 'default' and 'none' special cases
+   - **Tries method > field > relation in order** (this order is critical!)
+   - Recursively traverses relations
 
 3. **`getMethodNameForSource(string $source)`**
-    - Returns method name for source from `values` config
-    - Methods prefixed with `->` in config
-    - Checks if method exists on DataObject
-    - Returns null if no method configured/exists
+   - Returns method name for source from `values` config
+   - Methods prefixed with `->` in config
+   - Checks if method exists on DataObject
+   - Returns null if no method configured/exists
 
 4. **`getFieldNameForSource(string $source)`**
-    - Returns field name for source from `values` config
-    - Fields are plain strings (no `->` prefix)
-    - Checks if field exists and is not a relation
-    - Returns null if no field configured/exists
+   - Returns field name for source from `values` config
+   - Fields are plain strings (no `->` prefix)
+   - Checks if field exists and is not a relation
+   - Returns null if no field configured/exists
 
 5. **`getSourceRelation(?string $source): ?DataObject`**
-    - Returns related object for source
-    - Tries relation method > relation name > site fallback
-    - Returns null if relation doesn't exist
-    - Used for recursive value retrieval
+   - Returns related object for source
+   - Tries relation method > relation name > site fallback
+   - Returns null if relation doesn't exist
+   - Used for recursive value retrieval
 
 ### Critical: Method > Field > Relation Priority
 
 **The order in `getSourceValue()` is crucial**:
 
 1. **First**: Check for method mapping in `values` config
-    - If found and method exists, call it on **current object**
-    - Return the result
+   - If found and method exists, call it on **current object**
+   - Return the result
 
 2. **Second**: Check for field mapping in `values` config
-    - If found and field exists, get it from **current object**
-    - Return the value
+   - If found and field exists, get it from **current object**
+   - Return the value
 
 3. **Third**: Check for relation mapping in `relations` config
-    - If found and relation exists, **traverse to related object**
-    - Create new Resourceful instance for related object
-    - Recursively call `getValue()` on it
-    - Return the result
+   - If found and relation exists, **traverse to related object**
+   - Create new Resourceful instance for related object
+   - Recursively call `getValue()` on it
+   - Return the result
 
 **Why This Matters**:
 - `values` config = get from **current object** (no traversal)
@@ -331,16 +331,17 @@ getSourceValue('parent')
 
 **Inheritance Enabled When**:
 1. `isInheritable()` returns true:
-    - DoInherit field name configured
-    - Inherit source configured
-    - Inherit source is available
-    - DataObject has DoInherit field
+   - Inherit config is set (either field name OR `true`)
+   - Inherit source configured
+   - Inherit source is available
+   - If field name: DataObject has DoInherit field
+   - If `true`: No field check needed (forced)
 
 2. `isInherited()` returns true:
-    - `isInheritable()` is true
-    - DoInherit field value is true
+   - If forced (`'{inherit}': true`): Always true when inheritable
+   - If not forced: `isInheritable()` is true AND DoInherit field value is true
 
-**Inheritance Flow**:
+**Inheritance Flow (Optional Checkbox)**:
 ```
 User checks "Inherit from parent" checkbox
 └─ DoInherit field set to true
@@ -349,18 +350,36 @@ User checks "Inherit from parent" checkbox
          └─ Traverses to parent and recursively calls getValue()
 ```
 
+**Inheritance Flow (Forced)**:
+```
+No checkbox shown ('{inherit}': true)
+└─ isInherited() always returns true
+   └─ getSource() returns getInheritSource()
+      └─ getValue() calls getSourceValue('parent')
+         └─ Traverses to parent and recursively calls getValue()
+```
+
 ### DoInherit Field
 
-**Purpose**: Boolean field that enables/disables inheritance
+**Purpose**: Boolean field that enables/disables inheritance (when not forced)
 
 **Field Name**: Configured in `values.{inherit}`, defaults to `{FieldName}_DoInherit`
 
-**Behavior**:
-- When true: Use inherit source (usually parent)
-- When false: Use selected or default source
-- Overrides source selection when true
+**Special Value**: Set to `true` (boolean) to force inheritance without checkbox
 
-**CMS Field**: CheckboxFieldGroup with label from `fieldLabel()`
+**Behavior**:
+- **When field name** (e.g., `'HeroLede_DoInherit'`):
+  - Shows checkbox in CMS
+  - When checked: Use inherit source (usually parent)
+  - When unchecked: Use selected or default source
+  - Overrides source selection when checked
+- **When `true` (boolean)**:
+  - No checkbox shown in CMS
+  - Inheritance always active
+  - Local field still shown for user input
+  - Acts as automatic fallback when local is empty
+
+**CMS Field**: CheckboxFieldGroup with label from `fieldLabel()` (only when field name configured)
 
 ### Inheritance vs Source Selection
 
@@ -457,8 +476,8 @@ public function getInheritedValue(): mixed
 
 **Why This Works**:
 - Simply delegates to `getSourceValue()` which already handles both:
-    - Field-based sources (gets from current object)
-    - Relation-based sources (traverses to related object)
+  - Field-based sources (gets from current object)
+  - Relation-based sources (traverses to related object)
 - No need for special logic or relation traversal
 - Works for all source types (parent, site, custom fields, etc.)
 
@@ -937,7 +956,67 @@ values:
 
 **The Fix**: Use `values` config for same-object fields, `relations` config only for different objects.
 
-### Pattern 6: Multiple Fallbacks
+### Pattern 6: Forced Inheritance (No Checkbox)
+
+```yaml
+Page:
+  resourceful:
+    HeroHeadline:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        '{inherit}': true  # Force inheritance, no checkbox
+        page: 'Title'
+    HeroLede:
+      sources:
+        inherit: 'page'
+        select: 'local'
+        default: 'local'
+      values:
+        '{inherit}': 'HeroLede_DoInherit'  # Optional checkbox
+        page: 'Lede'
+```
+
+**Use Case**: Automatic fallback to inherited value without user choice (e.g., always use page title as hero headline if custom headline is empty)
+
+**How It Works**:
+- `'{inherit}': true` signals forced inheritance
+- `isInheritForced()` returns true
+- `isInherited()` always returns true (when inheritable)
+- No DoInherit checkbox shown in CMS
+- Local field still shown for user input
+- Acts as automatic fallback when local is empty
+
+**UI Behavior**:
+- **HeroHeadline**: Only shows local text field, no checkbox
+- **HeroLede**: Shows checkbox + inherited value display + local text field
+
+**Database Fields Needed**:
+```php
+private static $db = [
+    'HeroHeadline_Local' => 'Varchar(255)',  // No DoInherit field needed
+    'HeroLede_DoInherit' => 'Boolean',       // DoInherit field needed
+    'HeroLede_Local' => 'Varchar(255)',
+];
+```
+
+**Why This Is Useful**:
+- Cleaner UI when inheritance is the obvious default
+- Reduces user confusion (no checkbox to understand)
+- Still allows local override via the local field
+- Automatic fallback behavior without explicit user action
+
+**Implementation Details**:
+- `isInheritable()` checks if `'{inherit}'` is `true` OR a valid field name
+- If `true`: Skips field existence check (no field needed)
+- If field name: Checks if field exists in database
+- `isInheritCMSFieldEnabled()` returns false when forced (no checkbox)
+- `setFieldDefaults()` skips setting DoInherit field when forced
+- `removeCMSFields()` skips removing DoInherit field when forced
+
+### Pattern 7: Multiple Fallbacks
 
 ```yaml
 Page:
@@ -1070,3 +1149,12 @@ Resourceful is a configuration-driven inheritance system that:
 - Implement `getCMSField_{FieldName}_InheritedValue($fieldName, $value)`
 - Field appears when DoInherit checkbox is checked
 - Helps users see what they'll get before enabling inheritance
+
+### 6. Forced Inheritance
+- Set `'{inherit}': true` to force inheritance without checkbox
+- `isInheritForced()` checks if `'{inherit}'` config is boolean `true`
+- `isInheritable()` accepts both field name (string) OR `true` (boolean)
+- When forced: No DoInherit field needed, no checkbox shown, inheritance always active
+- When not forced: DoInherit field required, checkbox shown, user controls inheritance
+- `isInheritCMSFieldEnabled()` returns false when forced (suppresses checkbox)
+- Guards in `setFieldDefaults()` and `removeCMSFields()` skip DoInherit field when forced
