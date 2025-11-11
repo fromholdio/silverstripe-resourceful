@@ -700,6 +700,8 @@ class Resourceful
                 $dObj->setField($sourceFieldName, 'default');
             }
 
+            $separateSourcesWrapper = Wrapper::create();
+
             $defaultSource = $this->getDefaultSource();
             if (is_a($sourceField, HiddenField::class, false)) {
                 $source = $sourceField->getValue();
@@ -717,14 +719,32 @@ class Resourceful
                 if (!is_null($sources)) {
                     foreach ($sources as $source) {
                         $sourceFieldList = $this->getCMSFieldsForSource($source);
-                        if (!is_null($sourceFieldList)) {
+                        if (!is_null($sourceFieldList))
+                        {
+                            $isInComposite = true;
+                            if ($sourceFieldList instanceof FieldList) {
+                                foreach ($sourceFieldList as $sourceFieldItem) {
+                                    if ($sourceFieldItem instanceof ElementalAreaField) {
+                                        $isInComposite = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            elseif ($sourceFieldList instanceof ElementalAreaField) {
+                                $isInComposite = false;
+                            }
+
                             $sourceFieldsWrapper = Wrapper::create($sourceFieldList);
                             $sourceFieldsWrapper->setName($sourceFieldName . '_' . $source . '_Wrapper');
 
                             $displayIfEqualTo = $source === $defaultSource ? self::SOURCE_DEFAULT : $source;
                             $sourceFieldsWrapper->displayIf($sourceFieldName)->isEqualTo($displayIfEqualTo);
 
-                            $sourceWrapper->push($sourceFieldsWrapper);
+                            if ($isInComposite) {
+                                $sourceWrapper->push($sourceFieldsWrapper);
+                            } else {
+                                $separateSourcesWrapper->push($sourceFieldsWrapper);
+                            }
                         }
                     }
                 }
@@ -741,6 +761,10 @@ class Resourceful
 
         if (!is_null($doInheritField)) {
             $fields->push($doInheritField);
+        }
+
+        if ($separateSourcesWrapper->getChildren()->count() > 0) {
+            $fields->push($separateSourcesWrapper);
         }
 
         return $fields->count() > 0 ? $fields : null;
