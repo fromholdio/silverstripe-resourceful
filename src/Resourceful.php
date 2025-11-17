@@ -2,6 +2,7 @@
 
 namespace Fromholdio\Resourceful;
 
+use DNADesign\Elemental\Forms\ElementalAreaField;
 use Fromholdio\CheckboxFieldGroup\CheckboxFieldGroup;
 use Fromholdio\CMSFieldsPlacement\CMSFieldsPlacement;
 use Fromholdio\Resourceful\Extensions\ResourcefulExtension;
