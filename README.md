@@ -92,10 +92,10 @@ That's it. Resourceful handles everything else.
 ## Requirements
 
 - SilverStripe CMS ^6.0
-- PHP 8.1+
+- PHP 8.3+
 - fromholdio/silverstripe-checkboxfieldgroup ^1.2.0
 - fromholdio/silverstripe-cms-fields-placement ^1.2.0
-- unclecheese/display-logic ^3.0
+- unclecheese/display-logic ^4.0.0
 
 ## Installation
 

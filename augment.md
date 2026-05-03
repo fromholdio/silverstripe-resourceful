@@ -193,7 +193,7 @@ Checks if a source can be used:
 1. **Special sources**: 'none' and 'default' are always available
 2. **Field sources**: Check if field exists via `getFieldNameForSource()`
 3. **Method sources**: Check if method exists via `getMethodNameForSource()`
-4. **Relation sources**: 
+4. **Relation sources**:
    - If required (in `{require}`), check relation exists
    - Otherwise, check relation name/method exists
 5. **Site source**: Check if `getFallbackSite()` returns object
@@ -594,7 +594,7 @@ Page:
     SidebarArea:
       has_one: 'SidebarArea_Local'  # Local storage
       current: 'getResourcefulArea'  # Current retrieval
-  
+
   resourceful:
     SidebarArea:
       sources:
@@ -827,7 +827,7 @@ private $cachedResourcefulValues = [];
 public function getSidebarArea(): ?EvoElementalArea
 {
     if (!isset($this->cachedResourcefulValues['SidebarArea'])) {
-        $this->cachedResourcefulValues['SidebarArea'] = 
+        $this->cachedResourcefulValues['SidebarArea'] =
             $this->getResourcefulValue('SidebarArea');
     }
     return $this->cachedResourcefulValues['SidebarArea'];

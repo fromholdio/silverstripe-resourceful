@@ -616,6 +616,7 @@ class Resourceful
 
     public function getAvailableSources(): ?array
     {
+        $available = [];
         $sources = $this->getSelectSources();
         if (!is_null($sources)) {
             foreach ($sources as $source) {
@@ -677,8 +678,12 @@ class Resourceful
         }
 
         $doInheritField = null;
+        $doInheritFieldName = null;
+        $sourceWrapper = null;
+        $separateSourcesWrapper = Wrapper::create();
         if ($this->isInheritCMSFieldEnabled()) {
             $doInheritField = $this->getDoInheritCMSField();
+            $doInheritFieldName = $this->getDoInheritFieldName();
         }
 
         $sourceField = $this->getSourceCMSField();
@@ -689,7 +694,6 @@ class Resourceful
             $sourceWrapper->push($sourceField);
 
             if (!is_null($doInheritField)) {
-                $doInheritFieldName = $this->getDoInheritFieldName();
                 if (!empty($doInheritFieldName)) {
                     $sourceWrapper->displayIf($doInheritFieldName)->isNotChecked();
                     $sourceField->setTitle(false);
@@ -700,8 +704,6 @@ class Resourceful
             if (empty($sourceFieldName) || empty($dObj->getField($sourceFieldName))) {
                 $dObj->setField($sourceFieldName, 'default');
             }
-
-            $separateSourcesWrapper = Wrapper::create();
 
             $defaultSource = $this->getDefaultSource();
             if (is_a($sourceField, HiddenField::class, false)) {

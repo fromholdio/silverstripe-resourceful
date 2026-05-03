@@ -25,10 +25,5 @@
     }
   },
   "prefer-stable": true,
-  "minimum-stability": "dev",
-  "extra": {
-    "branch-alias": {
-      "dev-2.x": "2.0.x-dev"
-    }
-  }
+  "minimum-stability": "dev"
 }
