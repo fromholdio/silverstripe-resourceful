@@ -263,6 +263,14 @@ class Resourceful
         return $this->getConfigValue('values.{source}');
     }
 
+    public function getLocalFieldName(): string
+    {
+        $config = $this->getConfigValue('values.' . self::SOURCE_LOCAL . '');
+        if (is_array($config)) {
+            $config = array_pop($config);
+        }
+        return $config;
+    }
 
     public function getSource(): ?string
     {
@@ -904,7 +912,7 @@ class Resourceful
         return $fields->removeByName([
             $this->getDoInheritFieldName(),
             $this->getSourceFieldName(),
-//            $this->getLocalFieldName()
+            $this->getLocalFieldName()
         ]);
     }
 }
