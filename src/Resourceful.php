@@ -264,6 +264,12 @@ class Resourceful
         return $this->getConfigValue('values.{source}') ?? '';
     }
 
+    public function getLocalFieldNames(): array
+    {
+        $values = $this->getConfigValue('values.' . self::SOURCE_LOCAL) ?? [];
+        return is_array($values) ? $values : [$values];
+    }
+
 
     public function getSource(): ?string
     {
@@ -989,6 +995,10 @@ class Resourceful
         $sourceFieldName = $this->getSourceFieldName();
         if (!empty($sourceFieldName)) {
             $fields->removeByName($sourceFieldName);
+        }
+        $localFieldName = $this->getLocalFieldNames();
+        if (!empty($localFieldName)) {
+            $fields->removeByName($localFieldName);
         }
         return $fields;
     }
