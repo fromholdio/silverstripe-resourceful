@@ -263,13 +263,19 @@ class Resourceful
         return $this->getConfigValue('values.{source}');
     }
 
-    public function getLocalFieldName(): string
+    public function getLocalFieldNames(): array
     {
-        $config = $this->getConfigValue('values.' . self::SOURCE_LOCAL . '');
-        if (is_array($config)) {
-            $config = array_pop($config);
+        $values = $this->getConfigValue('values.' . self::SOURCE_LOCAL);
+        if (!is_array($values)) {
+            $values = [$values];
         }
-        return $config;
+        $fieldNames = [];
+        foreach ($values as $value) {
+            if (is_string($value) && $value !== '') {
+                $fieldNames[] = $value;
+            }
+        }
+        return $fieldNames;
     }
 
     public function getSource(): ?string
@@ -909,10 +915,14 @@ class Resourceful
 
     public function removeCMSFields(FieldList $fields): FieldList
     {
-        return $fields->removeByName([
+        $fields->removeByName([
             $this->getDoInheritFieldName(),
             $this->getSourceFieldName(),
-            $this->getLocalFieldName()
         ]);
+        $localFieldNames = $this->getLocalFieldNames();
+        if (!empty($localFieldNames)) {
+            $fields->removeByName($localFieldNames);
+        }
+        return $fields;
     }
 }
